@@ -65,5 +65,4 @@ Tour of the Code
 Acknowledgements
 ----------------
 
-Parts of the code were constructed with help from the Cursor AI-powered code
-editor and GitHub Copilot.
+Parts of the code were constructed with help from the Cursor AI-powered code editor and GitHub Copilot.

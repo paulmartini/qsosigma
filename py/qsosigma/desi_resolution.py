@@ -78,7 +78,7 @@ DESI_SPECTRO_BY_NAME = {ch.name: ch for ch in DESI_SPECTRO_CHANNELS}
 
 
 def channels_covering(wavelength_obs_angstrom: float) -> Tuple[DesiSm5Channel, ...]:
-    """Return SPECTRO channels whose tabulated wavelength range includes lambda_obs."""
+    """Return SPECTRO channels whose tabulated wavelength range includes lambda_obs. Note that out-of-range wavelengths fall back to the nearest channel."""
     wave = float(wavelength_obs_angstrom)
     covering = tuple(
         ch for ch in DESI_SPECTRO_CHANNELS

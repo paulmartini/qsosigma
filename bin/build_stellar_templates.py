@@ -553,7 +553,7 @@ def parse_args():
     parser.add_argument(
         '--output-dir',
         default=default_stellar_template_dir(),
-        help='Template directory (default: Example_ironfit/stellar_templates)',
+        help='Template directory (default: data/stellar_templates)',
     )
     parser.add_argument(
         '--subdir',

@@ -67,7 +67,7 @@ CONT_RED_HI = 4008.663
 FIT_HALF = 28.0
 PLOT_WAVE_LO = 3863.663
 PLOT_WAVE_HI = 4008.463
-PLOT_TEMPLATE_SIG_KMS = 200.0
+PLOT_TEMPLATE_SIG_KMS = 200.0	# reference for display purposes only
 LWRNG_HALF = 12.0
 
 # MILES library spectral resolution (FWHM in Angstrom); see stellar_templates/README.md.
@@ -218,7 +218,7 @@ def build_cak_windows(
     line_half_excl=None,
     fit_half=None,
 ):
-    """Build fit, metric, and continuum windows for Ca K."""
+    """Build fit, metric, and continuum windows used for Ca K."""
     line_half = LINE_HALF_EXCL if line_half_excl is None else line_half_excl
     fit_half = FIT_HALF if fit_half is None else fit_half
 
@@ -813,7 +813,7 @@ def template_percentile_half_range(values):
     Return the (84th - 16th percentile) / 2 scatter of ``values``.
 
     Used for Ca K uncertainties from the stellar-template ensemble. With fewer
-    than two finite values the scatter is 0.
+    than two finite values the scatter is NaN.
     """
     values = np.asarray(values, dtype=float)
     finite = values[np.isfinite(values)]
