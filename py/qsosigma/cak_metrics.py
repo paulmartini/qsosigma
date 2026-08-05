@@ -39,7 +39,6 @@ import numpy as np
 import pandas as pd
 import scipy.optimize
 
-import qsosigma
 from qsosigma import template_tools as ttools
 
 from qsosigma.desi_resolution import (

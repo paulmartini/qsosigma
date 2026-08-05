@@ -12,7 +12,6 @@ from matplotlib.ticker import MaxNLocator
 import numpy as np
 from astropy.io import fits
 
-from qsosigma.plot_spec import PlotSpec
 from qsosigma.cak_metrics import CAH_LAB_WAVE, CAK_LAB_WAVE, CAK_METRIC_SUFFIXES, CAK_PREFIX, C_KMS
 
 CAKPLOT_EXT_RE = re.compile(r'^CAKPLOT(\d+)$', re.IGNORECASE)
@@ -765,3 +764,37 @@ def plot_cak_multipanel(
             ),
         )
     return written
+
+def PlotSpec(ax,lbd,f,ferr=None,pixspec=None,
+             oprpix=None,PLOTERR=True,
+             XLABEL=True,YLABEL=True,
+             fscale=1.,lbdscale=1.,fmt='k-',label='',
+             linewidth=0.3,erralpha=0.2):
+    '''
+    Plot the spectrum.
+    Note: the input arrays should not contain NaN values
+
+    - pixspec: the pixel size of the spectrum;
+               (if specficied, do not fill in the region without pixels)
+    - oprpix: list of operations *for each pixel* (same length as "lbd")
+              if specified, high-light the interpolated regions.
+    '''
+    ax.plot(lbd,f,fmt,linewidth=linewidth,label=label)
+    if PLOTERR:
+        wherefill = None
+        if pixspec is not None:
+            wherefill = np.concatenate((abs(np.diff(lbd) - pixspec)<1e-3,[True]))
+        if ferr is not None:
+            ax.fill_between(lbd,f-ferr,f+ferr,where=wherefill,alpha=erralpha,
+                            facecolor=fmt[0],edgecolor=fmt[0])
+
+        if oprpix is not None:
+            ax.fill_between(lbd,f-ferr,f+ferr,where=(np.array(oprpix)=='interp'),                    
+                            alpha=0.2,facecolor='tab:orange',edgecolor='tab:orange')
+
+    if XLABEL:
+        ax.set_xlabel(r'Wavelength (%.0e $\AA$)'%(1./lbdscale),fontsize=12)
+    if YLABEL:
+        ax.set_ylabel(r'%.0e erg/s/cm$^2$/$\AA$'%(1./fscale),fontsize=12)
+
+

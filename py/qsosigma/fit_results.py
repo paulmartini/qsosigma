@@ -189,3 +189,13 @@ def print_all_summaries(results, emission_fits, cak_result=None):
     if cak_result is not None:
         print_cak_summary(cak_result.get('metrics', results), cak_meta=cak_result)  
 
+def _format_value_err(value, err, unit, n=3):
+    """Format value +/- error with n significant figures."""
+    if not np.isfinite(value):
+        return 'nan %s' % unit
+    if not np.isfinite(err) or err <= 0:
+        return '%s %s' % (_format_sigfig(value, n), unit)
+    return '%s +/- %s %s' % (
+        _format_sigfig(value, n), _format_sigfig(err, n), unit,
+    )
+
