@@ -49,21 +49,16 @@ Templates should span **3800–4100 Å** so they include **Ca II K (3933.663 Å)
 | `CAK_STELLAR_DISP_TOTAL` | Total kernel width √(σ*² + σ_inst² + σ_template_LSF²). Diagnostic only; not the quantity for quadrature redshift-error tests. |
 | `CAK_AT_BOUND` | 1 if σ* sits at the fit bound (20–750 km/s), else 0. Warnings are also printed and written to the FITS header. |
 
-## Running Ca K fits
-
-See the repository root [README.md](../../README.md) for how to run
-`run_cakfit.py`, validation mode, and plotting scripts.
-
 ## Building real templates
 
 Use `build_stellar_templates.py` at the repository root.
 
-Most of the existing templates originate from the UVES-POP program. To add more, download original resolution files from https://sl.voxastro.org/library/UVES-POP. 
+Most of the existing templates originate from the UVES-POP program. To add more, download original resolution fits files from https://sl.voxastro.org/library/UVES-POP. 
 
-Here is how to create a template from a spectrum
+The templates in the repository are lightweight files with just the CaK region. Here is how to create a template from a spectrum
 
 ```bash
-python build_stellar_templates.py /HD107446_R80k.fits \
+python build_stellar_templates.py HD107446_R80k.fits \
   --name hd107446 \
   --label "UVES-POP HD107446 K3III" \
   --spectral-type K3III \
