@@ -1,9 +1,9 @@
 """
 Ca II K stellar absorption template fitting and uncertainty estimation.
 
-Stellar template files live in ``Example_ironfit/stellar_templates/``. See that
-directory's README.md for their origin, format, and how to replace them with
-empirical spectra (e.g. MILES).
+Stellar template files live in ``data/stellar_templates/``. See that
+directory's README.md for their origin and format. 
+empirical spectra 
 
 Dispersion metrics
 ------------------
@@ -37,10 +37,10 @@ import numpy as np
 import pandas as pd
 import scipy.optimize
 
-import IronFit as ifit
+import template_tools as ttools
 from desi_resolution import (
     combine_velocity_sigmas,
-    desi_sm5_instrumental_sigma_kms_from_rest,
+    desi_spectro_instrumental_sigma_kms_from_rest,
 )
 
 C_KMS = 2.99792458e5
@@ -122,15 +122,13 @@ def _template_from_manifest_row(row) -> CaKTemplate:
 
 def load_cak_template_catalog(
     template_dir=None,
-    allow_synthetic_fallback=True,
     enabled_only=True,
 ):
     """
     Load Ca K templates from templates.manifest.csv.
 
     If ``enabled_only`` is True (default), only rows with enabled=true are
-    returned. If none are enabled and allow_synthetic_fallback is True, fall
-    back to synthetic/tpl_cak_*.csv with a warning printed to stdout.
+    returned. 
     """
     template_dir = template_dir or default_stellar_template_dir()
     manifest_path = os.path.join(template_dir, MANIFEST_FILENAME)
@@ -153,27 +151,6 @@ def load_cak_template_catalog(
     if not enabled_only:
         return templates
 
-    synthetic_dir = os.path.join(template_dir, 'synthetic')
-    if allow_synthetic_fallback and os.path.isdir(synthetic_dir):
-        fallback = []
-        for filename in sorted(os.listdir(synthetic_dir)):
-            if not filename.endswith('.csv'):
-                continue
-            stem = os.path.splitext(filename)[0]
-            fallback.append(CaKTemplate(
-                name=stem,
-                filename=os.path.join('synthetic', filename).replace('\\', '/'),
-                label='Synthetic placeholder (%s)' % stem,
-                source='IronFit analytic fallback',
-                enabled=True,
-            ))
-        if fallback:
-            print(
-                'WARNING: No enabled templates in %s; using %d synthetic fallback template(s).'
-                % (manifest_path, len(fallback))
-            )
-            return fallback
-
     return templates
 
 
@@ -189,7 +166,7 @@ def find_cak_template_by_name(template_dir, name):
         return None, 'Ca K template name is empty.'
 
     all_templates = load_cak_template_catalog(
-        template_dir, allow_synthetic_fallback=False, enabled_only=False,
+        template_dir, enabled_only=False,
     )
     matches = [t for t in all_templates if t.name == name]
     if not matches:
@@ -277,7 +254,7 @@ def cak_is_measurable(spres, min_pixels=MIN_PIXELS):
 def default_stellar_template_dir():
     return os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
-        'Example_ironfit', 'stellar_templates',
+        'data', 'stellar_templates',
     )
 
 
@@ -317,7 +294,7 @@ def _align_template_cak_peak(lbdtpl, ttpl, lab_wave=CAK_LAB_WAVE, half_window=CA
 
 def cak_peak_velocity_offset_kms(lbdtpl, ttpl, lab_wave=CAK_LAB_WAVE):
     """
-    Velocity that recenters the template Ca K peak on lab_wave via ShfTpl.
+    Velocity that recenters the template Ca K peak on lab_wave via shift_template.
 
     Positive values move template features to longer wavelength.
     """
@@ -353,7 +330,7 @@ def load_cak_template(template_dir, template: CaKTemplate, align_peak=True):
 
     Peak alignment is a multiplicative wavelength shift so the absorption peak
     sits at 3933.663 Å before fitting. The template is then resampled in
-    ``ln(λ)`` for velocity-space convolution with ``BrdTpl``.
+    ``ln(λ)`` for velocity-space convolution with ``broaden_template``.
     """
     path = os.path.join(template_dir, template.filename)
     if not os.path.isfile(path):
@@ -456,12 +433,12 @@ def _absorption_profile(
 ):
     """Shift, broaden, and interpolate the stellar absorption template."""
     sig_broad = combine_velocity_sigmas(sigv, sig_inst_kms)
-    lbdtpl_shf = ifit.ShfTpl(lbdtpl, v_shift, shfspace='log')
+    lbdtpl_shf = ttools.shift_template(lbdtpl, v_shift, shfspace='log')
     if sig_broad <= 0:
         ttpl_brd = np.asarray(ttpl, dtype=float)
     else:
         pix_kms = _template_pix_kms(lbdtpl)
-        ttpl_brd = ifit.BrdTpl(lbdtpl_shf, ttpl, sig_broad, pixtpl=pix_kms, brdspace=brdspace)
+        ttpl_brd = ttools.broaden_template(lbdtpl_shf, ttpl, sig_broad, pixtpl=pix_kms, brdspace=brdspace)
     return np.interp(lbd_target, lbdtpl_shf, ttpl_brd, left=0.0, right=0.0)
 
 

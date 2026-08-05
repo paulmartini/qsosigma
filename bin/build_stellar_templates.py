@@ -578,11 +578,6 @@ def parse_args():
         action='store_true',
         help='List templates currently enabled for run_cakfit.py and exit',
     )
-    parser.add_argument(
-        '--disable-synthetic',
-        action='store_true',
-        help='When building a real template, leave synthetic manifest entries disabled',
-    )
     return parser.parse_args()
 
 
