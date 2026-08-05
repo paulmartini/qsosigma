@@ -9,7 +9,22 @@ from astropy.table import Table
 REDSHIFT_KEYS = ('Z', 'REDSHIFT', 'Z_OBJ', 'Z_QSO', 'ZSTACK', 'HELIOZ', 'BLSZ')
 STACKINFO_Z_KEYS = ('Z', 'ZREF', 'ZMEAN')
 
-def load_spectrum(path, z_override=None, uncertainty_floor=0.01):
+# Match run_cakfit.py --uncertainty-floor default.
+DEFAULT_UNCERTAINTY_FLOOR = 0.002
+# Lower clip for ferr so chi2 never divides by zero / subnormals.
+FERR_EPSILON = float(np.finfo(np.float64).tiny)
+
+
+def sanitize_ferr(ferr):
+    """Clip ``ferr`` to be at least ``FERR_EPSILON`` (finite values only)."""
+    ferr = np.asarray(ferr, dtype=float)
+    out = np.array(ferr, dtype=float, copy=True)
+    finite = np.isfinite(out)
+    out[finite] = np.maximum(out[finite], FERR_EPSILON)
+    return out
+
+
+def load_spectrum(path, z_override=None, uncertainty_floor=DEFAULT_UNCERTAINTY_FLOOR):
     """
     Load a spectrum from FITS or ASCII.
 
@@ -17,7 +32,7 @@ def load_spectrum(path, z_override=None, uncertainty_floor=0.01):
     ----------
     uncertainty_floor : float
         Lower limit on the fractional uncertainty per pixel. Combined in
-        quadrature with the formal error (default: 0.01).
+        quadrature with the formal error (default: 0.002).
 
     Returns
     -------
@@ -44,9 +59,9 @@ def load_spectrum(path, z_override=None, uncertainty_floor=0.01):
         fmt = 'ASCII'
         spres, z = read_spectrum_ascii(path, z_override)
 
-    spres['ferr'] = apply_uncertainty_floor(
+    spres['ferr'] = sanitize_ferr(apply_uncertainty_floor(
         spres['f'], spres['ferr'], uncertainty_floor,
-    )
+    ))
 
     order = np.argsort(np.asarray(spres['lbd'], dtype=float))
     spres = spres[order]
@@ -73,14 +88,6 @@ def spectrum_stem(path):
             break
     return name
 
-
-def output_paths(stem, output_dir='.'):
-    """Build output file paths from the spectrum stem and output directory."""
-    return {
-        'results': os.path.join(output_dir, '%s_linefit.fits' % stem),
-        'line': os.path.join(output_dir, '%s_line.png' % stem),
-        'cak': os.path.join(output_dir, '%s_cak.png' % stem),
-    }
 
 def infer_fscale(spres):
     """Choose plot flux scaling based on typical flux level."""

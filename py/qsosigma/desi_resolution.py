@@ -23,6 +23,7 @@ import numpy as np
 C_KMS = 2.99792458e5
 FWHM_TO_SIGMA = 2.0 * np.sqrt(2.0 * np.log(2.0))
 
+# Provenance only (coefficients below are baked in; this path is not read at runtime).
 # Median-over-fibers linear fits from res-sm5-*-new.csv (2026-07).
 RESOLUTION_SOURCE = (
     '/global/cfs/cdirs/desi/users/martini/redshifts/fastspecfit/res-sm5-*-new.csv'

@@ -2,8 +2,7 @@
 Ca II K stellar absorption template fitting and uncertainty estimation.
 
 Stellar template files live in ``data/stellar_templates/``. See that
-directory's README.md for their origin and format. 
-empirical spectra 
+directory's README.md for their origin and format.
 
 Dispersion metrics
 ------------------
@@ -31,6 +30,7 @@ fits through ``run_cakfit.py``.
 
 import os
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import List, Optional, Tuple
 
 from pathlib import Path
@@ -54,8 +54,9 @@ CAK_LAB_WAVE = 3933.663
 CAH_LAB_WAVE = 3968.463
 MIN_PIXELS = 4
 MAX_CONT_ITER = 3
-DEFAULT_N_BOOT = 30
 MANIFEST_FILENAME = 'templates.manifest.csv'
+# Guard chi2 against zero / non-positive ferr (matches spectrum_io.FERR_EPSILON).
+_FERR_EPSILON = float(np.finfo(np.float64).tiny)
 
 # Rest-frame windows (Angstrom). Continuum sidebands avoid Ca K and Ca H absorption.
 LINE_HALF_EXCL = 12.0
@@ -350,16 +351,10 @@ def _resample_template_log(lbdtpl, ttpl):
     return lbdtpl_u, ttpl_u
 
 
-def load_cak_template(template_dir, template: CaKTemplate, align_peak=True):
-    """
-    Load a Ca K template CSV, sanitize NaNs, optionally align the Ca K peak to
-    ``CAK_LAB_WAVE``, and resample onto a uniform ln(wavelength) grid.
-
-    Peak alignment is a multiplicative wavelength shift so the absorption peak
-    sits at 3933.663 Å before fitting. The template is then resampled in
-    ``ln(λ)`` for velocity-space convolution with ``broaden_template``.
-    """
-    path = os.path.join(template_dir, template.filename)
+@lru_cache(maxsize=64)
+def _load_cak_template_cached(template_dir, filename, align_peak):
+    """Cached CSV load + align + ln(λ) resample (keyed by abs dir + filename)."""
+    path = os.path.join(template_dir, filename)
     if not os.path.isfile(path):
         raise FileNotFoundError('Ca K template not found: %s' % path)
     table = ascii.read(path, format='csv')
@@ -370,8 +365,26 @@ def load_cak_template(template_dir, template: CaKTemplate, align_peak=True):
     lbdtpl, ttpl = _sanitize_template_arrays(lbdtpl, ttpl)
     if align_peak:
         lbdtpl, _peak_wave, _shift = _align_template_cak_peak(lbdtpl, ttpl)
-    lbdtpl, ttpl = _resample_template_log(lbdtpl, ttpl)
-    return lbdtpl, ttpl
+    return _resample_template_log(lbdtpl, ttpl)
+
+
+def clear_cak_template_cache():
+    """Clear the loaded-template cache (mainly for tests)."""
+    _load_cak_template_cached.cache_clear()
+
+
+def load_cak_template(template_dir, template: CaKTemplate, align_peak=True):
+    """
+    Load a Ca K template CSV, sanitize NaNs, optionally align the Ca K peak to
+    ``CAK_LAB_WAVE``, and resample onto a uniform ln(wavelength) grid.
+
+    Peak alignment is a multiplicative wavelength shift so the absorption peak
+    sits at 3933.663 Å before fitting. The template is then resampled in
+    ``ln(λ)`` for velocity-space convolution with ``broaden_template``.
+    Results are cached for repeated loads (e.g. ``--validate`` multi-stack runs).
+    """
+    template_dir = os.path.abspath(template_dir or default_stellar_template_dir())
+    return _load_cak_template_cached(template_dir, template.filename, bool(align_peak))
 
 
 def _template_pix_kms(lbdtpl):
@@ -440,7 +453,18 @@ def _powerlaw(lbd, scnt, acnt, ref=CAK_LAB_WAVE):
     return np.exp(scnt) * (np.asarray(lbd, dtype=float) / ref) ** acnt
 
 
+def _positive_ferr(ferr):
+    """Clip finite ferr values to >= ``_FERR_EPSILON`` before chi2 division."""
+    ferr = np.asarray(ferr, dtype=float)
+    out = np.array(ferr, dtype=float, copy=True)
+    finite = np.isfinite(out)
+    out[finite] = np.maximum(out[finite], _FERR_EPSILON)
+    return out
+
+
 def _fit_powerlaw(lbd, flux, ferr, ref=CAK_LAB_WAVE):
+    flux = np.asarray(flux, dtype=float)
+    ferr = _positive_ferr(ferr)
     positive = flux[flux > 0]
     amp = float(np.median(positive)) if positive.size else 1.0
     amp = max(amp, 1e-30)
@@ -460,12 +484,14 @@ def _absorption_profile(
 ):
     """Shift, broaden, and interpolate the stellar absorption template."""
     sig_broad = combine_velocity_sigmas(sigv, sig_inst_kms)
-    lbdtpl_shf = ttools.shift_template(lbdtpl, v_shift, shfspace='log')
+    lbdtpl_shf = ttools.shift_template(lbdtpl, v_shift, space='log')
     if sig_broad <= 0:
         ttpl_brd = np.asarray(ttpl, dtype=float)
     else:
         pix_kms = _template_pix_kms(lbdtpl)
-        ttpl_brd = ttools.broaden_template(lbdtpl_shf, ttpl, sig_broad, pixtpl=pix_kms, brdspace=brdspace)
+        ttpl_brd = ttools.broaden_template(
+            lbdtpl_shf, ttpl, sig_broad, pixel_size=pix_kms, space=brdspace,
+        )
     return np.interp(lbd_target, lbdtpl_shf, ttpl_brd, left=0.0, right=0.0)
 
 
@@ -542,6 +568,9 @@ def _fit_cak_once(
     QSO stacks; joint refinement with a single locked template is preferred.
     Core weights scale with the current sigv at each likelihood evaluation.
     """
+    lbd = np.asarray(lbd, dtype=float)
+    flux = np.asarray(flux, dtype=float)
+    ferr = _positive_ferr(ferr)
     lo, hi = _resolve_sigv_bounds(sigv_min)
     if p0 is None:
         p0 = [0.0, 0.0, 0.0, _clamp_sigv(120.0, lo, hi), 0.15]
@@ -1056,10 +1085,10 @@ def measure_cak_absorption(
     ``template_name`` / ``locked_template_name`` select the reporting template;
     enabled templates are fit and culled for 16–84 uncertainties. ``sigv_min``
     raises the lower bound on σ* (validation: ``max(SIGV_MIN, verr)``).
-    ``n_boot`` is accepted for backward compatibility and ignored.
+    ``n_boot`` is accepted for backward compatibility and ignored (bootstrap
+    uncertainties were retired in favor of template-ensemble scatter).
     """
-    if n_boot is not None:
-        pass  # bootstrap uncertainties retired; template ensemble scatter only
+    del n_boot  # API compatibility only
     if not cak_is_measurable(spres):
         return None
     return fit_cak_all_templates(

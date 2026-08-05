@@ -39,12 +39,16 @@ import os
 import re
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
+
+# Allow ``python bin/run_cakfit.py`` from a checkout without PYTHONPATH set.
+_PY_DIR = Path(__file__).resolve().parents[1] / 'py'
+if _PY_DIR.is_dir() and str(_PY_DIR) not in sys.path:
+    sys.path.insert(0, str(_PY_DIR))
 
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table
-
-import qsosigma
 
 from qsosigma.cak_metrics import (
     CAK_LAB_WAVE,
@@ -56,7 +60,13 @@ from qsosigma.cak_metrics import (
 )
 from qsosigma.cak_plots import plot_cak, plot_cak_verr_diagnostic
 from qsosigma.fit_results import build_cak_plot_hdu, print_cak_summary
-from qsosigma.spectrum_io import flux_label, infer_fscale, load_spectrum, spectrum_stem
+from qsosigma.spectrum_io import (
+    DEFAULT_UNCERTAINTY_FLOOR,
+    flux_label,
+    infer_fscale,
+    load_spectrum,
+    spectrum_stem,
+)
 
 
 def _cakplot_extname(verr_kms):
@@ -123,8 +133,11 @@ def parse_args(argv=None):
         help='Directory with Ca K templates and templates.manifest.csv',
     )
     parser.add_argument(
-        '--uncertainty-floor', type=float, default=0.002,
-        help='Fractional uncertainty floor per pixel (default: 0.002)',
+        '--uncertainty-floor', type=float, default=DEFAULT_UNCERTAINTY_FLOOR,
+        help=(
+            'Fractional uncertainty floor per pixel (default: %g)'
+            % DEFAULT_UNCERTAINTY_FLOOR
+        ),
     )
     parser.add_argument(
         '--clobber',

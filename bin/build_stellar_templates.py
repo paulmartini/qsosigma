@@ -28,13 +28,18 @@ import argparse
 import csv
 import os
 import sys
+from pathlib import Path
 from typing import Iterable, List, Optional, Sequence, Tuple
+
+_PY_DIR = Path(__file__).resolve().parents[1] / 'py'
+if _PY_DIR.is_dir() and str(_PY_DIR) not in sys.path:
+    sys.path.insert(0, str(_PY_DIR))
 
 import numpy as np
 from astropy.io import ascii, fits
 from astropy.table import Table
 
-from cak_metrics import (
+from qsosigma.cak_metrics import (
     CAH_LAB_WAVE,
     CAK_LAB_WAVE,
     MANIFEST_FILENAME,

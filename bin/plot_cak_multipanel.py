@@ -24,10 +24,15 @@ import argparse
 import glob
 import os
 import sys
+from pathlib import Path
+
+_PY_DIR = Path(__file__).resolve().parents[1] / 'py'
+if _PY_DIR.is_dir() and str(_PY_DIR) not in sys.path:
+    sys.path.insert(0, str(_PY_DIR))
 
 import numpy as np
 
-from cak_plots import (
+from qsosigma.cak_plots import (
     format_multipanel_label,
     load_cak_plot_snapshot,
     plot_cak_multipanel,
