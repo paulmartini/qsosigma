@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build Ca II K stellar absorption templates for IronFit.
+Build Ca II K stellar absorption templates 
 
 Reads a rest-frame stellar spectrum (ASCII or FITS), divides out a pseudo-continuum
 fit to line-free regions blueward of Ca K and redward of Ca H, and writes a CSV
@@ -514,7 +514,7 @@ def build_from_batch_table(batch_path: str, template_dir: str, **kwargs) -> List
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description='Build Ca II K stellar absorption templates for IronFit.',
+        description='Build Ca II K stellar absorption templates.',
     )
     parser.add_argument(
         'input_spectrum',
