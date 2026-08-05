@@ -39,7 +39,6 @@ def _apply_lines_meta_header(header, meta, fe_params=None):
     if fe_template is not None:
         header['FETMPL'] = str(fe_template)[:68]
     params = fe_params if fe_params is not None else meta.get('fe_params')
-    _fe_param_header(header, params, fe_template)
 
     fit_lines = meta.get('fit_lines', [])
     if fit_lines:
