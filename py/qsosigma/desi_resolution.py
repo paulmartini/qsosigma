@@ -32,18 +32,20 @@ RESOLUTION_SOURCE = (
 
 @dataclass(frozen=True)
 class DesiSm5Channel:
-    """Linear R(lambda) for one DESI SPECTRO channel."""
+    """Linear R(λ_obs) = slope * λ_obs + intercept for one DESI SPECTRO channel."""
 
     name: str
     wave_min: float
     wave_max: float
-    slope: float
+    slope: float  # dR/dλ (per Angstrom)
     intercept: float
 
     def R(self, wavelength_obs_angstrom: float) -> float:
+        """Resolving power R at observed-frame wavelength (Angstrom)."""
         return self.slope * float(wavelength_obs_angstrom) + self.intercept
 
     def sigma_kms(self, wavelength_obs_angstrom: float) -> float:
+        """Instrumental Gaussian sigma (km/s) at observed-frame wavelength."""
         r = self.R(wavelength_obs_angstrom)
         if r <= 0:
             return np.nan
@@ -78,7 +80,11 @@ DESI_SPECTRO_BY_NAME = {ch.name: ch for ch in DESI_SPECTRO_CHANNELS}
 
 
 def channels_covering(wavelength_obs_angstrom: float) -> Tuple[DesiSm5Channel, ...]:
-    """Return SPECTRO channels whose tabulated wavelength range includes lambda_obs. Note that out-of-range wavelengths fall back to the nearest channel."""
+    """
+    Return SPECTRO channels covering ``lambda_obs``.
+
+    Out-of-range wavelengths fall back to the nearest channel (extrapolation).
+    """
     wave = float(wavelength_obs_angstrom)
     covering = tuple(
         ch for ch in DESI_SPECTRO_CHANNELS
@@ -91,6 +97,7 @@ def channels_covering(wavelength_obs_angstrom: float) -> Tuple[DesiSm5Channel, .
 
 
 def _distance_to_range(wave: float, channel: DesiSm5Channel) -> float:
+    """Distance from ``wave`` to the channel's wavelength interval."""
     if wave < channel.wave_min:
         return channel.wave_min - wave
     if wave > channel.wave_max:
@@ -102,7 +109,11 @@ def desi_spectro_R(
     wavelength_obs_angstrom: float,
     channels: Optional[Iterable[DesiSm5Channel]] = None,
 ) -> float:
-    """Resolving power R at observed-frame wavelength (Angstrom)."""
+    """
+    Resolving power R at observed-frame wavelength (Angstrom).
+
+    When multiple channels cover the wavelength (overlaps), returns the mean R.
+    """
     if channels is None:
         channels = channels_covering(wavelength_obs_angstrom)
     else:
@@ -128,7 +139,11 @@ def desi_spectro_instrumental_sigma_kms(
     wavelength_obs_angstrom: float,
     channels: Optional[Iterable[DesiSm5Channel]] = None,
 ) -> float:
-    """Instrumental Gaussian sigma (km/s) at observed-frame wavelength."""
+    """
+    Instrumental Gaussian sigma (km/s) at observed-frame wavelength.
+
+    Overlapping channels are averaged (same as :func:`desi_spectro_R`).
+    """
     if channels is None:
         channels = channels_covering(wavelength_obs_angstrom)
     else:
@@ -161,7 +176,11 @@ def desi_spectro_sigma_lbd_from_rest(
     z: float,
     ref_wave: Optional[float] = None,
 ) -> float:
-    """Instrumental Gaussian sigma in Angstrom at rest-frame wavelength."""
+    """
+    Instrumental Gaussian sigma in Angstrom at rest-frame wavelength.
+
+    Converts σ_kms using ``ref_wave`` (default: ``wavelength_rest_angstrom``).
+    """
     ref = float(wavelength_rest_angstrom if ref_wave is None else ref_wave)
     sig_kms = desi_spectro_instrumental_sigma_kms_from_rest(wavelength_rest_angstrom, z)
     return ref * sig_kms / C_KMS

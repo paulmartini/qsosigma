@@ -1,23 +1,29 @@
 #!/usr/bin/env python3
 """
-Build Ca II K stellar absorption templates 
+Build Ca II K stellar absorption templates.
 
-Reads a rest-frame stellar spectrum (ASCII or FITS), divides out a pseudo-continuum
-fit to line-free regions blueward of Ca K and redward of Ca H, and writes a CSV
-template plus an entry in templates.manifest.csv.
+Reads a rest-frame stellar spectrum (ASCII or FITS), divides out a
+pseudo-continuum fit to line-free regions blueward of Ca K and redward of Ca H,
+and writes a CSV template plus an entry in templates.manifest.csv.
 
-FITS support includes DESI-style WAVE/FLUX HDUs, binary tables (including UVES-POP
-SPECTRUM extensions), and MILES-style PRIMARY HDUs with CRVAL1/CDELT1/CRPIX1 WCS
-keywords. High-resolution inputs are read only over the Ca K region and resampled
-before writing compact CSV templates.
+These builder continuum bands (default 3820–3880 / 3990–4050 Å) define the
+template absorption profile. They are broader than the Ca K *fit* sidebands in
+``cak_metrics`` (used on QSO stacks).
+
+FITS support includes DESI-style WAVE/FLUX HDUs, binary tables (including
+UVES-POP SPECTRUM extensions), and MILES-style PRIMARY HDUs with
+CRVAL1/CDELT1/CRPIX1 WCS keywords. High-resolution inputs are read only over
+the Ca K region and resampled before writing compact CSV templates.
 
 Example
 -------
-  python build_stellar_templates.py miles_spectrum.fits \\
+  python bin/build_stellar_templates.py miles_spectrum.fits \\
       --name miles_1234_K3III --label "MILES 1234 K3III" \\
-      --spectral-type K3III --fe-h 0.0 --source "MILES v3.1 ID 1234"
+      --spectral-type K3III --fe-h 0.0 --source "MILES v3.1 ID 1234" \\
+      --output-dir data/stellar_templates
 
-  python build_stellar_templates.py --batch stars.csv
+  python bin/build_stellar_templates.py --batch stars.csv
+  python bin/build_stellar_templates.py --list
 
 Batch CSV columns: input_path,name,label,spectral_type,fe_h,source
 """
@@ -399,10 +405,12 @@ def build_absorption_template(
 
 
 def manifest_path(template_dir: str) -> str:
+    """Path to ``templates.manifest.csv`` under ``template_dir``."""
     return os.path.join(template_dir, MANIFEST_FILENAME)
 
 
 def read_manifest(template_dir: str) -> List[dict]:
+    """Return manifest rows as dicts (empty list if missing)."""
     path = manifest_path(template_dir)
     if not os.path.isfile(path):
         return []
@@ -411,6 +419,7 @@ def read_manifest(template_dir: str) -> List[dict]:
 
 
 def write_manifest(template_dir: str, rows: Iterable[dict]) -> None:
+    """Rewrite the manifest CSV from ``rows``."""
     fieldnames = [
         'name', 'filename', 'label', 'spectral_type', 'fe_h', 'source', 'enabled',
     ]
@@ -424,6 +433,7 @@ def write_manifest(template_dir: str, rows: Iterable[dict]) -> None:
 
 
 def upsert_manifest_entry(template_dir: str, entry: dict) -> None:
+    """Insert or replace a manifest row keyed by ``entry['name']``."""
     rows = read_manifest(template_dir)
     replaced = False
     for row in rows:
@@ -452,6 +462,7 @@ def build_one_template(
     subdir: str = 'empirical',
     enabled: bool = True,
 ) -> str:
+    """Build one absorption CSV, update the manifest, and return the output path."""
     input_path = os.path.abspath(input_path)
     file_meta = _read_fits_metadata(input_path) if _is_fits(input_path) else {}
     if not spectral_type:
@@ -506,6 +517,7 @@ def _batch_row_get(row, key, default=''):
 
 
 def build_from_batch_table(batch_path: str, template_dir: str, **kwargs) -> List[str]:
+    """Build templates for every row in a batch CSV; return output paths."""
     table = ascii.read(batch_path, format='csv')
     required = {'input_path', 'name', 'label'}
     missing = required - set(table.colnames)

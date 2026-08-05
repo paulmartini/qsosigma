@@ -3,18 +3,19 @@
 Build a 1-column Ca II K diagnostic figure for sigma_verr stacking tests.
 
 Preferred input is one multi-stack ``cak_fitresults_z*.fits`` file from
-``run_cakfit.py --validate`` (contains CAKPLOT* snapshots for each verr
-level; legacy ``cak_validate_*.fits`` names still work). Legacy mode still
-accepts five separate results FITS files with CAK_PLOT extensions.
+``run_cakfit.py --validate`` (any number of ``CAKPLOT*`` panels; legacy
+``cak_validate_*.fits`` names still work). Alternate mode accepts separate
+results FITS files with ``CAK_PLOT`` extensions (one per verr level; default
+labels 0/100/200/300/400 km/s).
 
 Example
 -------
-  python plot_cak_verr_diagnostic.py \\
+  python bin/plot_cak_verr_diagnostic.py \\
     /path/to/cak_fitresults_z0.250_z0.300.fits \\
     -o cak_verr_diagnostic.png \\
     --title "QSO stack, z = 0.25–0.30"
 
-  python plot_cak_verr_diagnostic.py \\
+  python bin/plot_cak_verr_diagnostic.py \\
     verr0/stack_cakfit.fits \\
     verr100/stack_cakfit.fits \\
     verr200/stack_cakfit.fits \\

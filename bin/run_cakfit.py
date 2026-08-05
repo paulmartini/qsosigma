@@ -4,30 +4,31 @@ Fit Ca II K stellar absorption velocity dispersion.
 
 Single-spectrum mode
 --------------------
-  python run_cakfit.py stack.fits
-  python run_cakfit.py stack.fits --cak-template hd138688
-  python run_cakfit.py stack.fits --uncertainty-floor 0.002 --clobber
+  python bin/run_cakfit.py stack.fits
+  python bin/run_cakfit.py stack.fits --cak-template hd138688
+  python bin/run_cakfit.py stack.fits --uncertainty-floor 0.002 --clobber
 
 Fits all enabled stellar templates. The reported CAK_STELLAR_DISP comes from
 the locked template (``--cak-template``, or lowest-χ² if omitted). Uncertainties
 are the 16–84 percentile half-range over the culled template ensemble
 (failed fits near σ* bounds or with tiny depth are dropped; locked is kept).
-Default output: ``cak_fitresults_z{zlo}_z{zhi}.fits`` when the stack name
-contains a redshift bin, otherwise ``cak_fitresults_{stem}.fits``.
+Default FITS output: ``cak_fitresults_z{zlo}_z{zhi}.fits`` when the stack name
+contains a redshift bin, otherwise ``cak_fitresults_{stem}.fits``. The matching
+PNG is ``cak_fitresults_*.png`` (disable with ``--no-plot``).
 
 Multi-stack (``--validate``) mode
 ---------------------------------
-  python run_cakfit.py --validate \\
+  python bin/run_cakfit.py --validate \\
       --verr-root /path/to/verrtests \\
       --zlo 0.05 --zhi 0.10
 
-Same default filename as single-spectrum mode for that redshift bin. In addition
-to the verr0 stack, discovers ``verr100/``, … stacks, fits each, and writes
-``VERR*`` / ``TPL*`` / ``CAKPLOT*`` extensions for every level. Also writes
-``cak_verr_diagnostic_z{zlo}_z{zhi}.png`` (verr panels; disable with ``--no-plot``).
-For each stack the σ* lower fit bound is raised to ``max(20, verr)`` km/s.
+Same default FITS filename as single-spectrum mode for that redshift bin. In
+addition to the verr0 stack, discovers ``verr100/``, … stacks, fits each, and
+writes ``VERR*`` / ``TPL*`` / ``CAKPLOT*`` extensions for every level. Also
+writes ``cak_verr_diagnostic_z{zlo}_z{zhi}.png``. For each stack the σ* lower
+fit bound is raised to ``max(20, verr)`` km/s.
 
-Ca K templates: data/stellar_templates/ (see README.md).
+Ca K templates: data/stellar_templates/ (see that directory's README.md).
 """
 
 from __future__ import annotations
@@ -70,9 +71,10 @@ from qsosigma.spectrum_io import (
 
 
 def _cakplot_extname(verr_kms):
+    """FITS extension name for a verr plot snapshot (e.g. CAKPLOT100)."""
     return 'CAKPLOT%d' % int(round(float(verr_kms)))
 
-FITS_STR_MAX = 68
+FITS_STR_MAX = 68  # FITS header string value limit (characters)
 VERR_DIR_RE = re.compile(r'^verr(\d+)$')
 # Redshift bin tag embedded in stack filenames, e.g. ..._z0.250_z0.300_...
 STACK_ZBIN_RE = re.compile(r'_z(\d+\.\d+)_z(\d+\.\d+)(?:_|$)')
@@ -205,8 +207,8 @@ def find_stack_in_directory(directory, zlo, zhi):
     """
     Find the stacked spectrum FITS for a redshift bin inside a verr directory.
 
-    Matches ``stack_*z{zlo}_z{zhi}*dark.fits`` so linefit / ironfit_chain /
-    bright-time products are excluded.
+    Matches ``stack_*z{zlo}_z{zhi}*dark.fits`` (dark-time coadds only), so
+    other products with the same redshift tag are excluded.
     """
     tag = redshift_bin_tag(zlo, zhi)
     pattern = os.path.join(directory, 'stack_*%s*dark.fits' % tag)

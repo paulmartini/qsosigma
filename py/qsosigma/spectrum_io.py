@@ -26,24 +26,30 @@ def sanitize_ferr(ferr):
 
 def load_spectrum(path, z_override=None, uncertainty_floor=DEFAULT_UNCERTAINTY_FLOOR):
     """
-    Load a spectrum from FITS or ASCII.
+    Load a spectrum from FITS or ASCII into the rest frame.
 
     Parameters
     ----------
+    path : str
+        Input spectrum path.
+    z_override : float, optional
+        Redshift. Required for ASCII (already rest-frame wavelengths; ``z`` is
+        metadata). For FITS, overrides header/table redshift; observed-frame
+        wavelengths are divided by ``(1 + z)``.
     uncertainty_floor : float
-        Lower limit on the fractional uncertainty per pixel. Combined in
-        quadrature with the formal error (default: 0.002).
+        Fractional uncertainty floor combined in quadrature with the formal
+        error (default: 0.002).
 
     Returns
     -------
     spres : astropy.table.Table
-        Columns lbd, f, ferr in the rest frame.
+        Columns ``lbd``, ``f``, ``ferr`` in the rest frame.
     z : float
-        Redshift used for the conversion (ASCII) or metadata (FITS).
+        Redshift used.
     pixspec : float
         Median rest-frame pixel size in Angstroms.
     fmt : str
-        'FITS' or 'ASCII'.
+        ``'FITS'`` or ``'ASCII'``.
     """
     path = os.path.abspath(path)
     if not os.path.isfile(path):
@@ -70,6 +76,7 @@ def load_spectrum(path, z_override=None, uncertainty_floor=DEFAULT_UNCERTAINTY_F
 
 
 def is_fits_file(path):
+    """Return True if ``path`` looks like a FITS file (extension or SIMPLE card)."""
     ext = os.path.splitext(path)[1].lower()
     if ext == '.gz':
         ext = os.path.splitext(path[:-3])[1].lower()
@@ -90,7 +97,11 @@ def spectrum_stem(path):
 
 
 def infer_fscale(spres):
-    """Choose plot flux scaling based on typical flux level."""
+    """
+    Choose plot flux scaling from the median near Ca K (3900–4000 Å).
+
+    Returns 1.0 if the median flux is > 1, else 1e17 (for 10^-17 erg units).
+    """
     lbd = np.asarray(spres['lbd'], dtype=float)
     cakmask = (lbd >= 3900) & (lbd <= 4000)
     ref = spres[cakmask] if np.any(cakmask) else spres
@@ -101,6 +112,7 @@ def infer_fscale(spres):
 
 
 def flux_label(fscale):
+    """Axis label string for the chosen flux scale."""
     if fscale == 1.0:
         return r'Flux (erg/s/cm$^2$/$\AA$)'
     return r'Flux ($10^{-17}$ erg/s/cm$^2$/$\AA$)'
@@ -121,6 +133,7 @@ def apply_uncertainty_floor(flux, ferr, uncertainty_floor):
 
 
 def _header_redshift(header):
+    """Read redshift from known header keywords, or None."""
     for key in REDSHIFT_KEYS:
         if key in header:
             return float(header[key])
@@ -128,6 +141,7 @@ def _header_redshift(header):
 
 
 def _table_redshift(hdul):
+    """Read redshift from STACKINFO / SPECOBJ / FIBERMAP tables, or None."""
     for extname in ('STACKINFO', 'SPECOBJ', 'FIBERMAP'):
         if extname not in hdul:
             continue
@@ -145,6 +159,7 @@ def _table_redshift(hdul):
 
 
 def read_redshift_from_fits(hdul):
+    """Return redshift from FITS headers or known tables, or None."""
     for hdu in hdul:
         if not hasattr(hdu, 'header'):
             continue
@@ -155,10 +170,12 @@ def read_redshift_from_fits(hdul):
 
 
 def _as_1d_array(data):
+    """Flatten array-like data to 1-D float."""
     return np.asarray(data, dtype=float).reshape(-1)
 
 
 def _flux_from_hdu(hdul):
+    """Extract flux from a FLUX HDU or PRIMARY image."""
     if 'FLUX' in hdul:
         return _as_1d_array(hdul['FLUX'].data)
     for hdu in hdul:
@@ -172,6 +189,11 @@ def _flux_from_hdu(hdul):
 
 
 def _ivar_from_hdu(hdul, nflux):
+    """
+    Extract per-pixel flux *error* (not IVAR) from IVAR, SIGMA, or ERR.
+
+    IVAR > 0 is converted as ``1/sqrt(IVAR)``; non-positive entries become NaN.
+    """
     if 'IVAR' in hdul:
         ivar = _as_1d_array(hdul['IVAR'].data)
         return np.where(ivar > 0, 1.0 / np.sqrt(ivar), np.nan)
@@ -187,6 +209,7 @@ def _ivar_from_hdu(hdul, nflux):
 
 
 def _wave_from_hdu(hdul, nflux):
+    """Extract observed-frame wavelength from WAVE HDUs or WCS keywords."""
     if 'WAVE' in hdul:
         wave = _as_1d_array(hdul['WAVE'].data)
         if wave.size == nflux:
@@ -216,6 +239,7 @@ def _wave_from_hdu(hdul, nflux):
 
 
 def _read_spectrum_from_hdul(hdul, z):
+    """Build a rest-frame spectrum Table from an open FITS HDUList."""
     if z is None:
         raise ValueError(
             'Redshift not found in FITS metadata. Supply it with --z.'
@@ -239,6 +263,11 @@ def _read_spectrum_from_hdul(hdul, z):
 
 
 def read_spectrum_ascii(path, z):
+    """
+    Read a rest-frame ASCII spectrum: whitespace columns ``lbd f ferr``.
+
+    ``z`` is required metadata (wavelengths are not de-redshifted).
+    """
     if z is None:
         raise ValueError('ASCII spectra are rest-frame; supply redshift with --z.')
 

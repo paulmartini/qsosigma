@@ -62,6 +62,7 @@ def parse_args():
 
 
 def stem_from_results(path: str) -> str:
+    """Strip known Ca K / legacy results prefixes and ``.fits`` from a path."""
     base = os.path.basename(path)
     for prefix in ('cak_fitresults_', 'cak_validate_'):
         if base.startswith(prefix) and base.endswith('.fits'):
@@ -72,7 +73,8 @@ def stem_from_results(path: str) -> str:
     return os.path.splitext(base)[0]
 
 
-def discover_linefit_files(pattern: str):
+def discover_results_files(pattern: str):
+    """Expand a glob (or single path) to absolute Ca K results FITS paths."""
     paths = sorted(glob.glob(pattern))
     if not paths and ('*' not in pattern and '?' not in pattern and '[' not in pattern):
         if os.path.isfile(pattern):
@@ -80,7 +82,12 @@ def discover_linefit_files(pattern: str):
     return [os.path.abspath(path) for path in paths]
 
 
+# Backward-compatible alias
+discover_linefit_files = discover_results_files
+
+
 def load_snapshots(paths):
+    """Load plot snapshots from results files; return (snapshots, skipped)."""
     snapshots = []
     skipped = []
     for path in paths:
@@ -103,7 +110,7 @@ def load_snapshots(paths):
 
 def main():
     args = parse_args()
-    paths = discover_linefit_files(args.pattern)
+    paths = discover_results_files(args.pattern)
     if not paths:
         print('ERROR: No files matched pattern: %s' % args.pattern, file=sys.stderr)
         return 2
@@ -120,6 +127,7 @@ def main():
         z_text = 'z=%.3f' % snapshot['z'] if np.isfinite(snapshot.get('z', np.nan)) else 'z=nan'
         print('  %s (%s)' % (snapshot['stem'], z_text))
 
+    # Relative Flux keeps multipanel stacks comparable across heterogeneous inputs.
     plot_cak_multipanel(
         snapshots,
         os.path.abspath(args.output),

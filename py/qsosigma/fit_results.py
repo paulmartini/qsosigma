@@ -10,7 +10,7 @@ from qsosigma.cak_metrics import (
     CAK_METRIC_SUFFIXES,
 )
 
-FITS_STR_MAX = 68
+FITS_STR_MAX = 68  # FITS header string value limit (characters)
 
 
 def _format_sigfig(value, n=3):
@@ -36,7 +36,15 @@ def _format_value_err(value, err, unit, n=3):
 
 
 def build_cak_plot_hdu(plot, pixspec=None, flux_unit=None, name='CAK_PLOT'):
-    """Build a Ca K plot binary-table extension from a plot dict."""
+    """
+    Build a Ca K plot binary-table extension from a plot dict.
+
+    Required keys: ``lbd``, ``flux``, ``ferr``, ``continuum``, ``model``,
+    ``template_broad``, ``residuals``. Optional: ``fit_range``,
+    ``template_sig_kms``, ``rest_wave``, ``cah_wave``. Writes header keywords
+    ``CAKFITLO/HI``, ``CAKTPLSG``, ``CAKRESTW``, ``CAKHWAVE``, ``CAKPIXSP``,
+    ``FLUXUNIT`` when available.
+    """
     if plot is None:
         return None
 
@@ -67,10 +75,20 @@ def build_cak_plot_hdu(plot, pixspec=None, flux_unit=None, name='CAK_PLOT'):
 
 
 def print_cak_summary(results, cak_meta=None):
+    """Print Ca K metrics; uncertainties are template-ensemble 16–84 half-ranges."""
     print('CAK (Ca II K stellar absorption):')
-    print('  CAK_STELLAR_DISP is the LSF-corrected stellar / kinematic sigma*.')
-    print('  CAK_STELLAR_DISP_TOTAL is the full kernel width (diagnostic only).')
-    print('  Uncertainties are the 16–84 half-range over the template ensemble.')
+    print(
+        '  CAK_STELLAR_DISP (σ*) is stellar/kinematic broadening with the DESI '
+        'instrumental LSF in the forward model (not template-LSF corrected).'
+    )
+    print(
+        '  CAK_STELLAR_DISP_TOTAL is √(σ*² + σ_inst² + σ_template_LSF²) '
+        '(diagnostic only).'
+    )
+    print(
+        '  Uncertainties are the 16–84 half-range over the culled template '
+        'ensemble (NaN if only the locked template remains).'
+    )
     for suffix in CAK_METRIC_SUFFIXES:
         key = 'CAK_%s' % suffix
         value = results.get(key, np.nan)

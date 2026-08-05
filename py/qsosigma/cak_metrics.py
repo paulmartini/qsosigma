@@ -58,7 +58,10 @@ MANIFEST_FILENAME = 'templates.manifest.csv'
 # Guard chi2 against zero / non-positive ferr (matches spectrum_io.FERR_EPSILON).
 _FERR_EPSILON = float(np.finfo(np.float64).tiny)
 
-# Rest-frame windows (Angstrom). Continuum sidebands avoid Ca K and Ca H absorption.
+# Rest-frame windows (Angstrom) for the Ca K *fit*. Continuum sidebands avoid
+# Ca K and Ca H. These are tighter than the template-builder pseudo-continuum
+# bands in build_stellar_templates.py (3820–3880 / 3990–4050), which define
+# absorption templates rather than the QSO-stack continuum.
 LINE_HALF_EXCL = 12.0
 CONT_BLUE_LO = 3888.663
 CONT_BLUE_HI = 3921.663
@@ -67,7 +70,7 @@ CONT_RED_HI = 4008.663
 FIT_HALF = 28.0
 PLOT_WAVE_LO = 3863.663
 PLOT_WAVE_HI = 4008.463
-PLOT_TEMPLATE_SIG_KMS = 200.0	# reference for display purposes only
+PLOT_TEMPLATE_SIG_KMS = 200.0  # display-only reference broadening (not fitted σ*)
 LWRNG_HALF = 12.0
 
 # MILES library spectral resolution (FWHM in Angstrom); see stellar_templates/README.md.
@@ -85,7 +88,7 @@ SIGV_BOUND_TOL = 5.0
 # Ensemble members with depth at or below this are treated as failed fits.
 DEPTH_FAIL_MAX = 0.02
 
-# Peak search window used when aligning templates to CaK_LAB_WAVE.
+# Peak search window used when aligning templates to CAK_LAB_WAVE.
 CAK_ALIGN_HALF_A = 20.0
 
 # Multi-start grid for sigv (km/s) to avoid shallow local minima after template alignment.
@@ -155,10 +158,18 @@ def load_cak_template_catalog(
     enabled_only=True,
 ):
     """
-    Load Ca K templates from templates.manifest.csv.
+    Load Ca K templates from ``templates.manifest.csv``.
 
-    If ``enabled_only`` is True (default), only rows with enabled=true are
-    returned. 
+    Parameters
+    ----------
+    template_dir : str, optional
+        Template root (default: :func:`default_stellar_template_dir`).
+    enabled_only : bool
+        If True (default), return only rows with ``enabled=true``.
+
+    Returns
+    -------
+    list of CaKTemplate
     """
     template_dir = template_dir or default_stellar_template_dir()
     manifest_path = os.path.join(template_dir, MANIFEST_FILENAME)
@@ -209,6 +220,7 @@ def find_cak_template_by_name(template_dir, name):
 
 
 def _n_pixels(lbd, lo, hi):
+    """Count samples of ``lbd`` in ``[lo, hi]``."""
     return int(np.sum((lbd >= lo) & (lbd <= hi)))
 
 
@@ -218,7 +230,19 @@ def build_cak_windows(
     line_half_excl=None,
     fit_half=None,
 ):
-    """Build fit, metric, and continuum windows used for Ca K."""
+    """
+    Build Ca K fit, coverage, and continuum sideband windows.
+
+    Returns
+    -------
+    rngline : list
+        Chi2 fit window around Ca K.
+    lwrng : list
+        Narrow coverage check around Ca K (used by :func:`cak_is_measurable`
+        only; not a science metric aperture).
+    cntrng : ndarray, shape (4,)
+        Continuum sidebands ``[blue_lo, blue_hi, red_lo, red_hi]``.
+    """
     line_half = LINE_HALF_EXCL if line_half_excl is None else line_half_excl
     fit_half = FIT_HALF if fit_half is None else fit_half
 
@@ -250,7 +274,7 @@ def _cak_core_weights(
     sigma_kms=CORE_WEIGHT_SIG_FLOOR_KMS,
     floor=CORE_WEIGHT_FLOOR,
 ):
-    """Return chi2 weights that emphasize pixels near the Ca K line core."""
+    """Chi2 weights that emphasize pixels near the Ca K line core."""
     dv = C_KMS * (np.asarray(lbd, dtype=float) / rest_wave - 1.0)
     sigma = max(float(sigma_kms), CORE_WEIGHT_SIG_FLOOR_KMS)
     core = np.exp(-0.5 * (dv / sigma) ** 2)
@@ -258,7 +282,10 @@ def _cak_core_weights(
 
 
 def cak_is_measurable(spres, min_pixels=MIN_PIXELS):
-    """Return True if Ca K can be fit in the spectrum."""
+    """
+    Return True if Ca K can be fit: line coverage plus at least one
+    continuum sideband with ``min_pixels`` each.
+    """
     lbd = np.asarray(spres['lbd'], dtype=float)
     if lbd.size == 0:
         return False
@@ -369,7 +396,7 @@ def _load_cak_template_cached(template_dir, filename, align_peak):
 
 
 def clear_cak_template_cache():
-    """Clear the loaded-template cache (mainly for tests)."""
+    """Clear the loaded-template cache (for tests / reloads)."""
     _load_cak_template_cached.cache_clear()
 
 
@@ -388,6 +415,7 @@ def load_cak_template(template_dir, template: CaKTemplate, align_peak=True):
 
 
 def _template_pix_kms(lbdtpl):
+    """Template pixel size in km/s from adjacent ln(λ) spacing."""
     dln = abs(np.log(lbdtpl[1]) - np.log(lbdtpl[0]))
     return dln * C_KMS
 
@@ -401,7 +429,7 @@ def fwhm_angstrom_to_sigma_kms(fwhm_angstrom, wavelength_angstrom):
 
 
 def infer_template_fwhm_angstrom(template: Optional[CaKTemplate]) -> float:
-    """Return the template LSF FWHM (Angstrom), or 0 when baked into the profile."""
+    """Template LSF FWHM (Å): MILES→2.5; UVES/other→0 (resolution baked in)."""
     if template is None:
         return 0.0
     source = (template.source or '').upper()
@@ -443,6 +471,7 @@ def stellar_disp_total_kms(
 
 
 def _propagate_total_disp_err(sig_fit_kms, err_fit_kms, sig_inst_kms, sig_template_lsf_kms):
+    """Propagate σ* error into TOTAL ≈ |σ*/TOTAL| * err(σ*)."""
     total = stellar_disp_total_kms(sig_fit_kms, sig_inst_kms, sig_template_lsf_kms)
     if total <= 0 or not np.isfinite(err_fit_kms):
         return np.nan
@@ -450,6 +479,7 @@ def _propagate_total_disp_err(sig_fit_kms, err_fit_kms, sig_inst_kms, sig_templa
 
 
 def _powerlaw(lbd, scnt, acnt, ref=CAK_LAB_WAVE):
+    """Power-law continuum: exp(scnt) * (λ/ref)^acnt."""
     return np.exp(scnt) * (np.asarray(lbd, dtype=float) / ref) ** acnt
 
 
@@ -463,6 +493,7 @@ def _positive_ferr(ferr):
 
 
 def _fit_powerlaw(lbd, flux, ferr, ref=CAK_LAB_WAVE):
+    """Fit continuum power-law coefficients ``(scnt, acnt)`` on sideband pixels."""
     flux = np.asarray(flux, dtype=float)
     ferr = _positive_ferr(ferr)
     positive = flux[flux > 0]
@@ -496,6 +527,7 @@ def _absorption_profile(
 
 
 def _cak_model(lbd, scnt, acnt, v_shift, sigv, depth, lbdtpl, ttpl, sig_inst_kms=0.0):
+    """Continuum times (1 - depth * broadened absorption)."""
     cont = _powerlaw(lbd, scnt, acnt)
     absorption = _absorption_profile(
         lbdtpl, ttpl, v_shift, sigv, lbd, sig_inst_kms=sig_inst_kms,
@@ -515,6 +547,7 @@ def _resolve_sigv_bounds(sigv_min=None, sigv_max=None):
 
 
 def _sigv_at_bound(sigv, sigv_min=None, sigv_max=None, tol=None):
+    """True if σ* is within ``tol`` of the active bounds."""
     lo, hi = _resolve_sigv_bounds(sigv_min, sigv_max)
     if tol is None:
         tol = SIGV_BOUND_TOL
@@ -522,6 +555,7 @@ def _sigv_at_bound(sigv, sigv_min=None, sigv_max=None, tol=None):
 
 
 def _clamp_sigv(sigv, sigv_min=None, sigv_max=None):
+    """Clamp σ* to the active fit bounds."""
     lo, hi = _resolve_sigv_bounds(sigv_min, sigv_max)
     return float(np.clip(float(sigv), lo, hi))
 
@@ -563,10 +597,9 @@ def _fit_cak_once(
     """
     ML fit for one template on a fixed wavelength segment.
 
-    Continuum parameters are initialized from the sideband power law and refined
-    jointly with (v_shift, sigv, depth). A hard continuum freeze biases σ* low on
-    QSO stacks; joint refinement with a single locked template is preferred.
-    Core weights scale with the current sigv at each likelihood evaluation.
+    Continuum (scnt, acnt) is refined jointly with (v_shift, sigv, depth).
+    Bounds: v ±800 km/s, depth 1e-4–0.99, σ* in the active ``sigv_min``–max
+    window. Core weights scale with the current sigv at each NLL evaluation.
     """
     lbd = np.asarray(lbd, dtype=float)
     flux = np.asarray(flux, dtype=float)
@@ -629,7 +662,11 @@ def _fit_cak_multistart(
     lbd, flux, ferr, lbdtpl, ttpl, scnt, acnt, p0_base=None, sig_inst_kms=0.0,
     sigv_min=None,
 ):
-    """Run ``_fit_cak_once`` from several sigv starting values; keep lowest chi2."""
+    """
+    Run ``_fit_cak_once`` from several σ* starts; keep lowest chi2.
+
+    Starts are de-duplicated if closer than 15 km/s after clamping.
+    """
     lo, hi = _resolve_sigv_bounds(sigv_min)
     base = _full_p0_from_start(p0_base, scnt, acnt)
     base[3] = _clamp_sigv(base[3], lo, hi)
@@ -654,6 +691,7 @@ def _fit_cak_multistart(
 
 
 def _refine_line_half_excl(sigv_kms, rest_wave, current_half):
+    """Widen continuum exclusion half-width with σ* (floor ~6 Å, cap 20 Å)."""
     sigma_lbd = rest_wave * sigv_kms / C_KMS
     target = max(2.0 * sigma_lbd, LINE_HALF_EXCL * 0.5)
     return max(current_half, min(target, 20.0))
@@ -749,7 +787,13 @@ def fit_cak_with_template(
 
 
 def build_cak_plot_data(spres, fit, lbdtpl, ttpl, z=None):
-    """Build Ca K plot arrays on a wide window that includes Ca H."""
+    """
+    Build Ca K plot arrays on a wide window that includes Ca H.
+
+    Returns a dict with ``lbd``, ``flux``, ``ferr``, ``continuum``, ``model``,
+    ``template_broad`` (display reference at ``PLOT_TEMPLATE_SIG_KMS``),
+    ``residuals``, lab wavelengths, and ``fit_range``, or None if too few pixels.
+    """
     lbd_all = np.asarray(spres['lbd'], dtype=float)
     flux_all = np.asarray(spres['f'], dtype=float)
     ferr_all = np.asarray(spres['ferr'], dtype=float)
@@ -803,6 +847,7 @@ def build_cak_plot_data(spres, fit, lbdtpl, ttpl, z=None):
 
 
 def _ivar_from_err(err):
+    """Convert a 1σ error to inverse variance (0 if non-positive / non-finite)."""
     if not np.isfinite(err) or err <= 0:
         return 0.0
     return float(1.0 / err ** 2)
@@ -812,8 +857,9 @@ def template_percentile_half_range(values):
     """
     Return the (84th - 16th percentile) / 2 scatter of ``values``.
 
-    Used for Ca K uncertainties from the stellar-template ensemble. With fewer
-    than two finite values the scatter is NaN.
+    Used for Ca K uncertainties from the stellar-template ensemble.
+    Zero finite values → NaN; one finite value → 0; otherwise the half-range.
+    Callers may still report NaN when only the locked template survives culling.
     """
     values = np.asarray(values, dtype=float)
     finite = values[np.isfinite(values)]
@@ -825,6 +871,7 @@ def template_percentile_half_range(values):
 
 
 def _emit_cak_warnings(warnings):
+    """Print each warning message to stdout."""
     for message in warnings:
         print('WARNING: %s' % message)
 
@@ -878,10 +925,16 @@ def fit_cak_all_templates(
     otherwise the lowest-χ² template. Uncertainties are the 16–84 percentile
     half-range over ensemble members that pass the failed-fit cull (σ* near the
     active bounds or depth ≤ ``DEPTH_FAIL_MAX``), always including the locked
-    template. If only the locked template remains, errors are NaN. Bootstrap is
+    template.     If only the locked template remains, errors are NaN. Bootstrap is
     not used.
 
-    Returns dict with metrics, best-fit plot data, per-template arrays, and metadata.
+    Returns
+    -------
+    dict or None
+        Keys include ``metrics``, ``plot``, ``locked_template``,
+        ``all_templates``, ``ensemble_templates``, ``template_sigvs``,
+        ``template_centroids``, ``template_depths``, ``warnings``, and
+        related metadata. None on hard failure.
     """
     template_dir = template_dir or default_stellar_template_dir()
     lock_name = locked_template_name if locked_template_name is not None else template_name

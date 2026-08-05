@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "qsosigma"
 version = "0.1.0"
-description = "Ca II K stellar velocity dispersion fits for quasar host stacks"
+description = "Ca II K stellar velocity dispersion fits for quasar host galaxies"
 readme = "README.md"
 license = { text = "BSD-3-Clause" }
 requires-python = ">=3.9"

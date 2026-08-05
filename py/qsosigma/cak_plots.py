@@ -24,6 +24,7 @@ def velocity_to_wavelength(v_kms, ref):
 
 
 def _mark_centroid(ax, v_kms, rest_wave, label=None):
+    """Draw a vertical line at the Ca K centroid velocity."""
     if not np.isfinite(v_kms):
         return
     wave = velocity_to_wavelength(v_kms, rest_wave)
@@ -31,6 +32,7 @@ def _mark_centroid(ax, v_kms, rest_wave, label=None):
 
 
 def _panel_label(ax, text, fontsize=10):
+    """Draw an upper-left panel annotation."""
     ax.text(
         0.03, 0.97, text, transform=ax.transAxes,
         ha='left', va='top', fontsize=fontsize,
@@ -54,6 +56,7 @@ def shade_cak_excluded_regions(ax, plot):
 
 
 def format_cak_wavelength_axis(ax):
+    """Apply integer Angstrom tick formatting on the wavelength axis."""
     ax.xaxis.set_major_locator(MaxNLocator(nbins=8, steps=[1, 2, 5, 10]))
     ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _pos: '%.0f' % x))
     ax.tick_params(labelsize=9)
@@ -239,6 +242,7 @@ def _plot_hdu_for_verr(hdul, verr_kms: Optional[float] = None):
 
 
 def _snapshot_from_hdus(plot_hdu, metrics_hdu, primary_header=None) -> Dict:
+    """Assemble a plotting snapshot dict from plot and metrics HDUs."""
     plot = _plot_dict_from_cak_plot_hdu(plot_hdu)
     metrics = _metrics_from_table_hdu(metrics_hdu)
     cak_header = plot_hdu.header
@@ -282,8 +286,11 @@ def load_cak_plot_snapshot(path: str, verr_kms: Optional[float] = None) -> Optio
         (legacy ``cak_validate_*.fits`` names are also recognized)
 
     For multi-stack files, ``verr_kms`` selects the panel (default: lowest
-    available, typically verr0). Returns a dict with ``plot``, ``metrics``,
-    ``z``, and ``flux_unit`` keys, suitable for :func:`plot_cak_panels`.
+    available, typically verr0).
+
+    Returns a dict with ``plot``, ``metrics``, ``z``, ``flux_unit``,
+    ``infile``, ``pixspec``, and ``verr_kms`` (when available), suitable for
+    :func:`plot_cak_panels`.
     """
     path = os.path.abspath(path)
     if not os.path.isfile(path):
@@ -356,6 +363,7 @@ is_cak_validate_fits = is_cak_fitresults_fits
 
 
 def _default_panel_label(snapshot: Dict) -> str:
+    """Fallback panel label from redshift."""
     z = snapshot.get('z', np.nan)
     if np.isfinite(z):
         return 'z = %.3f' % z
@@ -406,6 +414,7 @@ def format_verr_panel_label(verr_kms, snapshot: Dict) -> str:
 
 
 def _snapshot_cak_result(snapshot: Dict) -> Dict:
+    """Minimal ``{plot, metrics}`` dict for :func:`plot_cak_panels`."""
     return {'plot': snapshot['plot'], 'metrics': snapshot.get('metrics', {})}
 
 
@@ -444,6 +453,8 @@ def plot_cak_verr_diagnostic(
     Each entry is a dict with ``verr_kms`` and ``snapshot`` keys. Panels are
     drawn top-to-bottom in entry order. A shared legend is placed below the
     stack; sigma_verr and measured sigma_* annotations appear in each panel.
+
+    Returns the last panel's ``{plot, metrics}`` (for optional reuse).
     """
     entries = list(entries)
     if not entries:
@@ -526,6 +537,7 @@ def plot_cak_verr_diagnostic(
 
 
 def _global_plot_xlim(snapshots):
+    """Shared wavelength limits spanning all snapshot plot windows."""
     xmin = np.inf
     xmax = -np.inf
     for snapshot in snapshots:
@@ -535,9 +547,10 @@ def _global_plot_xlim(snapshots):
     return (xmin, xmax)
 
 
+# Pagination limits for :func:`plot_cak_multipanel` (rows x cols grid).
 MULTIPANEL_MAX_ROWS = 5
 MULTIPANEL_MAX_COLS = 3
-MULTIPANEL_FIRST_PAGE_MAX_DATA = 14
+MULTIPANEL_FIRST_PAGE_MAX_DATA = 14  # one cell reserved for the legend
 MULTIPANEL_OTHER_PAGE_MAX_DATA = 15
 
 
@@ -703,6 +716,9 @@ def plot_cak_multipanel(
     Panels are ordered left-to-right, then top-to-bottom, in the caller's
     snapshot order (typically increasing redshift).
 
+    ``ncols`` is accepted for backward compatibility and ignored; layout is
+    paginated with at most 3 columns.
+
     Returns the list of output paths written.
     """
     snapshots = list(snapshots)
@@ -710,7 +726,7 @@ def plot_cak_multipanel(
         raise ValueError('No Ca K plot snapshots to display.')
 
     if ncols is not None:
-        pass  # kept for backward compatibility; layout is paginated (max 3 columns)
+        pass  # ignored; see docstring
 
     ylabel = ylabel or next(
         (snap.get('flux_unit') for snap in snapshots if snap.get('flux_unit')),
@@ -765,36 +781,39 @@ def plot_cak_multipanel(
         )
     return written
 
-def PlotSpec(ax,lbd,f,ferr=None,pixspec=None,
-             oprpix=None,PLOTERR=True,
-             XLABEL=True,YLABEL=True,
-             fscale=1.,lbdscale=1.,fmt='k-',label='',
-             linewidth=0.3,erralpha=0.2):
-    '''
-    Plot the spectrum.
-    Note: the input arrays should not contain NaN values
+def PlotSpec(
+    ax, lbd, f, ferr=None, pixspec=None,
+    oprpix=None, PLOTERR=True,
+    XLABEL=True, YLABEL=True,
+    fscale=1., lbdscale=1., fmt='k-', label='',
+    linewidth=0.3, erralpha=0.2,
+):
+    """
+    Plot a spectrum (and optional error band) on ``ax``.
 
-    - pixspec: the pixel size of the spectrum;
-               (if specficied, do not fill in the region without pixels)
-    - oprpix: list of operations *for each pixel* (same length as "lbd")
-              if specified, high-light the interpolated regions.
-    '''
-    ax.plot(lbd,f,fmt,linewidth=linewidth,label=label)
+    Legacy IronFit helper used by Ca K panels. Arrays should not contain NaNs.
+    If ``pixspec`` is set, the error fill skips wavelength gaps larger than one
+    pixel. ``oprpix`` may mark interpolated pixels (highlighted in orange).
+    """
+    ax.plot(lbd, f, fmt, linewidth=linewidth, label=label)
     if PLOTERR:
         wherefill = None
         if pixspec is not None:
-            wherefill = np.concatenate((abs(np.diff(lbd) - pixspec)<1e-3,[True]))
+            wherefill = np.concatenate((abs(np.diff(lbd) - pixspec) < 1e-3, [True]))
         if ferr is not None:
-            ax.fill_between(lbd,f-ferr,f+ferr,where=wherefill,alpha=erralpha,
-                            facecolor=fmt[0],edgecolor=fmt[0])
-
+            ax.fill_between(
+                lbd, f - ferr, f + ferr, where=wherefill, alpha=erralpha,
+                facecolor=fmt[0], edgecolor=fmt[0],
+            )
         if oprpix is not None:
-            ax.fill_between(lbd,f-ferr,f+ferr,where=(np.array(oprpix)=='interp'),                    
-                            alpha=0.2,facecolor='tab:orange',edgecolor='tab:orange')
+            ax.fill_between(
+                lbd, f - ferr, f + ferr, where=(np.array(oprpix) == 'interp'),
+                alpha=0.2, facecolor='tab:orange', edgecolor='tab:orange',
+            )
 
     if XLABEL:
-        ax.set_xlabel(r'Wavelength (%.0e $\AA$)'%(1./lbdscale),fontsize=12)
+        ax.set_xlabel(r'Wavelength (%.0e $\AA$)' % (1. / lbdscale), fontsize=12)
     if YLABEL:
-        ax.set_ylabel(r'%.0e erg/s/cm$^2$/$\AA$'%(1./fscale),fontsize=12)
+        ax.set_ylabel(r'%.0e erg/s/cm$^2$/$\AA$' % (1. / fscale), fontsize=12)
 
 
