@@ -1,87 +1,83 @@
-"""Tools to broaden and shift templates. 
-   Originally from IronFit by Zhefu Yu"""
+"""Tools to broaden and shift stellar absorption templates.
+
+Originally from IronFit by Zhefu Yu.
+"""
+
+import numpy as np
+from astropy.convolution import Gaussian1DKernel, convolve
+
+C_KMS = 2.99792458e5
 
 
-import numpy as np 
-import astropy
-from astropy.io import fits
-from astropy.convolution import Gaussian1DKernel, convolve, convolve_fft
-          
-def broaden_template(lbdtpl,ftpl,wtpl,pixtpl=1.,brdspace='linear'):
-    '''
-    Broaden a template
+def broaden_template(
+    wavelength, values, width, pixel_size=1.0, space='linear',
+):
+    """
+    Broaden a template with a Gaussian kernel.
 
-    Input:
-    - lbdtpl,ftpl: iron template
-    - wtpl: the smoothing width
-    - pixtpl: the pixel size of the iron template (in wavelength unit)
-    - brdspace: broaden the template in which space;
-                choose between "linear"/"log", i.e., wavelength/velocity space
-                (here "log" refers to ln, not log10)
-    ***
-    if broadening in wavelength space:
-      - "lbdtpl","ftpl" should be evenly sampled in linear wavelength space
-      - "pixtpl", "wtpl" in wavelength unit
-    if broadening in log wavelength (i.e., velocity) space:
-      - "lbdtpl","ftpl" should be evenly sampled in LOG wavelength space
-      - "wtpl" in km/s
-      - "pixtpl" is not used in the calculation. 
-        The pixel size in log space is directly calculated using "lbdtpl"
-    ***
-    
-    Output:
-    - ftpl_colv: the broadened iron template 
-    (same sampling as the input template)
-    '''
-    #NOTE: the input width for the kernel is in unit of PIXEL, not wavelength!
-    if brdspace=='linear':
-        wtpl_pix = wtpl / pixtpl
-        gkernel = Gaussian1DKernel(stddev=wtpl_pix)
-        ftpl_colv = convolve(ftpl,gkernel)
-    elif brdspace=='log':
-        # Calculate the width in pixels
-        c = 2.99792458e5 #km/s
-        lnlbd = np.log(lbdtpl)
-        pixln = abs(lnlbd[1] - lnlbd[0])
-        wtpl_pix = (wtpl/c) / pixln
-        # Convolve in the lbd * F_lbd vs. ln(lbd) space
-        gkernel = Gaussian1DKernel(stddev=wtpl_pix)
-        lbdftpl_colv = convolve(lbdtpl*ftpl,gkernel)
-        ftpl_colv = lbdftpl_colv / lbdtpl
+    Parameters
+    ----------
+    wavelength, values : array-like
+        Template wavelength and absorption/flux arrays.
+    width : float
+        Gaussian smoothing width. In wavelength units when ``space='linear'``;
+        in km/s when ``space='log'``.
+    pixel_size : float
+        Template pixel size in wavelength units (used only for
+        ``space='linear'``). For ``space='log'``, the ln(λ) spacing is taken
+        from ``wavelength``.
+    space : {'linear', 'log'}
+        Broaden in wavelength space (``linear``) or velocity / ln(λ) space
+        (``log``; natural log, not log10). For ``linear``, ``wavelength``
+        should be evenly sampled in λ; for ``log``, evenly sampled in ln(λ).
 
-    else:
-        raise ValueError('Unknown space for broadening!')
+    Returns
+    -------
+    broadened : ndarray
+        Broadened template on the same sampling as the input.
+    """
+    # Gaussian1DKernel expects stddev in pixels, not physical units.
+    if space == 'linear':
+        width_pix = width / pixel_size
+        kernel = Gaussian1DKernel(stddev=width_pix)
+        return convolve(values, kernel)
 
-    return ftpl_colv
+    if space == 'log':
+        ln_wavelength = np.log(wavelength)
+        dln = abs(ln_wavelength[1] - ln_wavelength[0])
+        width_pix = (width / C_KMS) / dln
+        kernel = Gaussian1DKernel(stddev=width_pix)
+        # Convolve λ * F(λ) vs. ln(λ), then divide by λ.
+        return convolve(wavelength * values, kernel) / wavelength
+
+    raise ValueError('Unknown space for broadening: %r' % space)
 
 
-def shift_template(lbdtpl,dx,shfspace='linear'):
-    '''
-    Shift a template
+def shift_template(wavelength, shift, space='linear'):
+    """
+    Shift a template in wavelength or velocity space.
 
-    Input:
-    - lbdtpl: wavelength array of the iron template
-    - dx: displacement of the template
-    - shfpace: shift the template in which space;
-                choose between "linear"/"log", i.e., wavelength/velocity space
-                (here "log" refers to ln, not log10)
-    ***
-    if shifting in wavelength space: "dx" in wavelength unit
-    if shifting in log wavelength (i.e., velocity) space: "dx" in km/s
-    ***
+    Parameters
+    ----------
+    wavelength : array-like
+        Template wavelength array.
+    shift : float
+        Displacement in wavelength units when ``space='linear'``, or in km/s
+        when ``space='log'``.
+    space : {'linear', 'log'}
+        Shift in wavelength space (``linear``) or velocity / ln(λ) space
+        (``log``; natural log, not log10).
 
-    Output:
-    - lbdtpl_shf: wavelength array of the shifted template
-    '''
-    if shfspace=='linear':
-        lbdtpl_shf = lbdtpl + dx
-    elif shfspace=='log':
-        c = 2.99792458e5 #km/s
-        dlnlbd = dx / c
-        lnlbd_shf = np.log(lbdtpl) + dlnlbd
-        lbdtpl_shf = np.exp(lnlbd_shf)
-    else:
-        raise ValueError('Unknown space for shifting!')
-    return lbdtpl_shf
+    Returns
+    -------
+    wavelength_shifted : ndarray
+        Shifted wavelength array (values unchanged).
+    """
+    if space == 'linear':
+        return wavelength + shift
 
+    if space == 'log':
+        dln = shift / C_KMS
+        return np.exp(np.log(wavelength) + dln)
 
+    raise ValueError('Unknown space for shifting: %r' % space)
