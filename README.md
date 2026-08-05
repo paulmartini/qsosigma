@@ -39,15 +39,42 @@ Alternatively, without pip::
 Stellar templates are under ``data/stellar_templates/`` (see that directory's
 README). Override the location with ``--stellar-template-dir`` if needed.
 
-Getting Started
----------------
+Running Ca K fits
+-----------------
 
 The main script is **bin/run_cakfit.py**::
 
-    python bin/run_cakfit.py stack.fits --cak-template hd138688
+    # Single spectrum (auto-pick best χ² template for the point estimate)
+    python bin/run_cakfit.py qsospec.fits
+
+    # Lock the reporting template; ensemble still used for 16–84 uncertainties
+    python bin/run_cakfit.py qsospec.fits --cak-template hd138688
+
+    # Fit verr0 plus verr-injected stacks for one redshift bin
+    # Default output: cak_fitresults_z0.050_z0.100.fits (override with -o)
+    python bin/run_cakfit.py --validate \
+      --verr-root /path/to/verrtests --zlo 0.05 --zhi 0.10
+
     python bin/run_cakfit.py --help
 
-Ca K template documentation and further examples:
+``--cak-template`` / the locked template may be disabled in the manifest; a
+warning is issued. Uncertainties are the **16–84 percentile half-range**
+over enabled templates after culling failed fits (σ* within 5 km/s of the
+active bounds, or depth ≤ 0.02). The locked template is always kept. If only
+it remains, the error is NaN and a warning is printed.
+
+Default products are named ``cak_fitresults_z{zlo}_z{zhi}.fits``. With
+``--validate``, the code also fits verr-injected stacks, writes
+``VERR*`` / ``TPL*`` / ``CAKPLOT*`` extensions for each level, and saves
+``cak_verr_diagnostic_z{zlo}_z{zhi}.png`` (use ``--no-plot`` to skip). The σ*
+lower bound is raised to ``max(20, verr)`` km/s on those stacks.::
+
+    python bin/plot_cak_verr_diagnostic.py cak_fitresults_z0.250_z0.300.fits
+    python bin/plot_cak_multipanel.py "cak_fitresults_*.fits" -o cak_spectra.png
+
+(``plot_cak_multipanel.py`` uses the verr0 panel from each multi-stack file.)
+
+Template format, manifest, and building new templates:
 ``data/stellar_templates/README.md``.
 
 Tour of the Code

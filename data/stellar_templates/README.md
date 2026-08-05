@@ -51,51 +51,24 @@ Templates should span **3800–4100 Å** so they include **Ca II K (3933.663 Å)
 
 ## Running Ca K fits
 
-```bash
-# Single spectrum (auto-pick best χ² template for the point estimate)
-python run_cakfit.py qsospec.fits
-
-# Lock the reporting template; ensemble still used for 16–84 uncertainties
-python run_cakfit.py qsospec.fits --cak-template hd138688
-
-# Fit verr0 plus verr-injected stacks for one redshift bin
-# Default output: cak_fitresults_z0.050_z0.100.fits (override with -o)
-python run_cakfit.py --validate \
-  --verr-root /path/to/verrtests --zlo 0.05 --zhi 0.10
-```
-
-`--cak-template` / the locked template may be disabled in the manifest; a
-warning is issued. Uncertainties are the **16–84 percentile half-range**
-over enabled templates after culling failed fits (σ* within 5 km/s of the
-active bounds, or depth ≤ 0.02). The locked template is always kept. If only
-it remains, the error is NaN and a warning is printed.
-
-Default products are named `cak_fitresults_z{zlo}_z{zhi}.fits`. With
-`--validate`, the code also fits verr-injected stacks, writes
-`VERR*` / `TPL*` / `CAKPLOT*` extensions for each level, and saves
-`cak_verr_diagnostic_z{zlo}_z{zhi}.png` (use `--no-plot` to skip). The σ* lower
-bound is raised to `max(20, verr)` km/s on those stacks.
-
-```bash
-python plot_cak_verr_diagnostic.py cak_fitresults_z0.250_z0.300.fits
-python plot_cak_multipanel.py "cak_fitresults_*.fits" -o cak_spectra.png
-```
-
-(`plot_cak_multipanel.py` uses the verr0 panel from each multi-stack file.)
+See the repository root [README.md](../../README.md) for how to run
+`run_cakfit.py`, validation mode, and plotting scripts.
 
 ## Building real templates
 
 Use `build_stellar_templates.py` at the repository root.
 
-Single spectrum:
+Most of the existing templates originate from the UVES-POP program. To add more, download original resolution files from https://sl.voxastro.org/library/UVES-POP. 
+
+Here is how to create a template from a spectrum
 
 ```bash
-python build_stellar_templates.py /path/to/miles_star.fits \
-  --name miles_1234_K3III \
-  --label "MILES 1234 K3III" \
+python build_stellar_templates.py /HD107446_R80k.fits \
+  --name hd107446 \
+  --label "UVES-POP HD107446 K3III" \
   --spectral-type K3III \
-  --fe-h 0.0 \
-  --source "MILES v3.1 ID 1234"
+  --fe-h -0.398 \
+  --source "UVES-POP HD107446 (R~80000)"
 ```
 
 Batch mode (`stars.csv` columns: `input_path,name,label[,spectral_type,fe_h,source,subdir,enabled]`):
