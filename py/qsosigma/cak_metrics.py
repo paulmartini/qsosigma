@@ -36,8 +36,8 @@ from typing import List, Optional, Tuple
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 import scipy.optimize
+from astropy.io import ascii
 
 from qsosigma import template_tools as ttools
 
@@ -112,16 +112,39 @@ def _parse_manifest_bool(value) -> bool:
     return str(value).strip().lower() in ('1', 'true', 'yes', 'y')
 
 
+def _row_get(row, key, default=''):
+    """Return a stripped string from an astropy Table row, or ``default``."""
+    colnames = getattr(row, 'colnames', None)
+    if colnames is not None and key not in colnames:
+        return default
+    try:
+        value = row[key]
+    except (KeyError, ValueError, IndexError):
+        return default
+    if value is None:
+        return default
+    try:
+        if np.ma.is_masked(value):
+            return default
+    except (TypeError, ValueError):
+        pass
+    text = str(value).strip()
+    if not text or text.lower() in ('nan', 'none', '--'):
+        return default
+    return text
+
+
 def _template_from_manifest_row(row) -> CaKTemplate:
-    filename = str(row['filename']).strip()
+    filename = _row_get(row, 'filename')
+    name = _row_get(row, 'name')
     return CaKTemplate(
-        name=str(row['name']).strip(),
+        name=name,
         filename=filename.replace('\\', '/'),
-        label=str(row.get('label', row['name'])).strip(),
-        spectral_type=str(row.get('spectral_type', '') or '').strip(),
-        fe_h=str(row.get('fe_h', '') or '').strip(),
-        source=str(row.get('source', '') or '').strip(),
-        enabled=_parse_manifest_bool(row.get('enabled')),
+        label=_row_get(row, 'label', name),
+        spectral_type=_row_get(row, 'spectral_type'),
+        fe_h=_row_get(row, 'fe_h'),
+        source=_row_get(row, 'source'),
+        enabled=_parse_manifest_bool(_row_get(row, 'enabled')),
     )
 
 
@@ -140,9 +163,9 @@ def load_cak_template_catalog(
     templates: List[CaKTemplate] = []
 
     if os.path.isfile(manifest_path):
-        df = pd.read_csv(manifest_path)
-        for _, row in df.iterrows():
-            filename = str(row.get('filename', '') or '').strip()
+        table = ascii.read(manifest_path, format='csv')
+        for row in table:
+            filename = _row_get(row, 'filename')
             if not filename:
                 continue
             template = _template_from_manifest_row(row)
@@ -339,9 +362,9 @@ def load_cak_template(template_dir, template: CaKTemplate, align_peak=True):
     path = os.path.join(template_dir, template.filename)
     if not os.path.isfile(path):
         raise FileNotFoundError('Ca K template not found: %s' % path)
-    df = pd.read_csv(path)
-    lbdtpl = np.asarray(df['wavelength'], dtype=float)
-    ttpl = np.asarray(df['absorption'], dtype=float)
+    table = ascii.read(path, format='csv')
+    lbdtpl = np.asarray(table['wavelength'], dtype=float)
+    ttpl = np.asarray(table['absorption'], dtype=float)
     order = np.argsort(lbdtpl)
     lbdtpl, ttpl = lbdtpl[order], ttpl[order]
     lbdtpl, ttpl = _sanitize_template_arrays(lbdtpl, ttpl)

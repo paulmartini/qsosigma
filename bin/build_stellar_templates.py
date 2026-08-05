@@ -31,8 +31,8 @@ import sys
 from typing import Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
-import pandas as pd
-from astropy.io import fits
+from astropy.io import ascii, fits
+from astropy.table import Table
 
 from cak_metrics import (
     CAH_LAB_WAVE,
@@ -290,7 +290,7 @@ def _default_source_string(path: str, meta: dict) -> str:
 def read_stellar_spectrum(
     path: str,
     read_range: Optional[Sequence[float]] = None,
-) -> pd.DataFrame:
+) -> Table:
     """Load a rest-frame stellar spectrum with columns lbd, f."""
     path = os.path.abspath(path)
     if not os.path.isfile(path):
@@ -300,25 +300,25 @@ def read_stellar_spectrum(
         with fits.open(path, memmap=True) as hdul:
             wave, flux = _read_fits_spectrum(hdul, read_range=read_range)
     else:
-        df = pd.read_csv(
-            path,
-            sep=r'\s+',
-            comment='#',
-            header=None,
-            engine='python',
-        )
-        if df.shape[1] < 2:
-            df = pd.read_csv(path, comment='#')
-        if df.shape[1] < 2:
-            raise ValueError('ASCII spectrum must have at least wavelength and flux columns.')
-        wave = np.asarray(df.iloc[:, 0], dtype=float)
-        flux = np.asarray(df.iloc[:, 1], dtype=float)
+        try:
+            table = ascii.read(path, format='no_header', comment='#')
+        except Exception:
+            table = ascii.read(path, format='csv', comment='#')
+        if len(table.colnames) < 2:
+            raise ValueError(
+                'ASCII spectrum must have at least wavelength and flux columns.'
+            )
+        wave = np.asarray(table.columns[0], dtype=float)
+        flux = np.asarray(table.columns[1], dtype=float)
         if read_range is not None:
             mask = (wave >= read_range[0]) & (wave <= read_range[1])
             wave, flux = wave[mask], flux[mask]
 
     order = np.argsort(wave)
-    return pd.DataFrame({'lbd': wave[order], 'f': flux[order]})
+    return Table({
+        'lbd': np.asarray(wave[order], dtype=float),
+        'f': np.asarray(flux[order], dtype=float),
+    })
 
 
 def fit_pseudo_continuum(
@@ -358,7 +358,7 @@ def build_absorption_template(
     blue_range: Sequence[float] = DEFAULT_BLUE_CONT,
     red_range: Sequence[float] = DEFAULT_RED_CONT,
     output_step: Optional[float] = DEFAULT_OUTPUT_STEP_A,
-) -> pd.DataFrame:
+) -> Table:
     """Convert a stellar spectrum to absorption = 1 - flux / pseudo-continuum."""
     wave = np.asarray(wave, dtype=float)
     flux = np.asarray(flux, dtype=float)
@@ -387,7 +387,10 @@ def build_absorption_template(
     absorption[valid] = 1.0 - flux[valid] / continuum[valid]
     absorption = np.clip(absorption, 0.0, 1.0)
     wave, absorption = _resample_uniform(wave, absorption, output_step)
-    return pd.DataFrame({'wavelength': wave, 'absorption': absorption})
+    return Table({
+        'wavelength': np.asarray(wave, dtype=float),
+        'absorption': np.asarray(absorption, dtype=float),
+    })
 
 
 def manifest_path(template_dir: str) -> str:
@@ -458,8 +461,8 @@ def build_one_template(
     )
     sp = read_stellar_spectrum(input_path, read_range=read_range)
     template = build_absorption_template(
-        sp['lbd'].values,
-        sp['f'].values,
+        np.asarray(sp['lbd'], dtype=float),
+        np.asarray(sp['f'], dtype=float),
         wave_range=wave_range,
         blue_range=blue_range,
         red_range=red_range,
@@ -470,7 +473,7 @@ def build_one_template(
     filename = os.path.join(rel_dir, '%s.csv' % name) if rel_dir else '%s.csv' % name
     out_path = os.path.join(template_dir, filename)
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    template.to_csv(out_path, index=False)
+    ascii.write(template, out_path, format='csv', overwrite=True)
 
     upsert_manifest_entry(template_dir, {
         'name': name,
@@ -484,25 +487,41 @@ def build_one_template(
     return out_path
 
 
+def _batch_row_get(row, key, default=''):
+    colnames = getattr(row, 'colnames', ())
+    if key not in colnames:
+        return default
+    value = row[key]
+    if value is None or np.ma.is_masked(value):
+        return default
+    text = str(value).strip()
+    if not text or text.lower() in ('nan', 'none', '--'):
+        return default
+    return text
+
+
 def build_from_batch_table(batch_path: str, template_dir: str, **kwargs) -> List[str]:
-    table = pd.read_csv(batch_path)
+    table = ascii.read(batch_path, format='csv')
     required = {'input_path', 'name', 'label'}
-    missing = required - set(table.columns)
+    missing = required - set(table.colnames)
     if missing:
         raise ValueError('Batch table missing columns: %s' % ', '.join(sorted(missing)))
 
     outputs = []
-    for _, row in table.iterrows():
+    default_subdir = kwargs.get('subdir', 'empirical')
+    for row in table:
         outputs.append(build_one_template(
-            input_path=str(row['input_path']),
-            name=str(row['name']),
-            label=str(row['label']),
+            input_path=_batch_row_get(row, 'input_path'),
+            name=_batch_row_get(row, 'name'),
+            label=_batch_row_get(row, 'label'),
             template_dir=template_dir,
-            spectral_type=str(row.get('spectral_type', '') or ''),
-            fe_h=str(row.get('fe_h', '') or ''),
-            source=str(row.get('source', '') or ''),
-            subdir=str(row.get('subdir', kwargs.get('subdir', 'empirical')) or 'empirical'),
-            enabled=str(row.get('enabled', 'true')).lower() in ('1', 'true', 'yes', 'y'),
+            spectral_type=_batch_row_get(row, 'spectral_type'),
+            fe_h=_batch_row_get(row, 'fe_h'),
+            source=_batch_row_get(row, 'source'),
+            subdir=_batch_row_get(row, 'subdir', default_subdir) or 'empirical',
+            enabled=_batch_row_get(row, 'enabled', 'true').lower() in (
+                '1', 'true', 'yes', 'y',
+            ),
             wave_range=kwargs.get('wave_range', DEFAULT_WAVE_RANGE),
             blue_range=kwargs.get('blue_range', DEFAULT_BLUE_CONT),
             red_range=kwargs.get('red_range', DEFAULT_RED_CONT),
@@ -632,7 +651,7 @@ def main():
     )
     print('Wrote %s (%d pixels, %.3f–%.3f A)' % (
         out_path,
-        len(pd.read_csv(out_path)),
+        len(ascii.read(out_path, format='csv')),
         args.wave_range[0],
         args.wave_range[1],
     ))

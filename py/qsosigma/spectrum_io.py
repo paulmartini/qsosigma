@@ -3,8 +3,8 @@
 import os
 
 import numpy as np
-import pandas as pd
-from astropy.io import fits
+from astropy.io import ascii, fits
+from astropy.table import Table
 
 REDSHIFT_KEYS = ('Z', 'REDSHIFT', 'Z_OBJ', 'Z_QSO', 'ZSTACK', 'HELIOZ', 'BLSZ')
 STACKINFO_Z_KEYS = ('Z', 'ZREF', 'ZMEAN')
@@ -21,7 +21,7 @@ def load_spectrum(path, z_override=None, uncertainty_floor=0.01):
 
     Returns
     -------
-    spres : pandas.DataFrame
+    spres : astropy.table.Table
         Columns lbd, f, ferr in the rest frame.
     z : float
         Redshift used for the conversion (ASCII) or metadata (FITS).
@@ -45,12 +45,12 @@ def load_spectrum(path, z_override=None, uncertainty_floor=0.01):
         spres, z = read_spectrum_ascii(path, z_override)
 
     spres['ferr'] = apply_uncertainty_floor(
-        spres['f'].values, spres['ferr'].values, uncertainty_floor,
+        spres['f'], spres['ferr'], uncertainty_floor,
     )
 
-    order = np.argsort(spres['lbd'].values)
-    spres = spres.iloc[order].reset_index(drop=True)
-    pixspec = float(np.median(np.diff(spres['lbd'].values)))
+    order = np.argsort(np.asarray(spres['lbd'], dtype=float))
+    spres = spres[order]
+    pixspec = float(np.median(np.diff(np.asarray(spres['lbd'], dtype=float))))
     return spres, z, pixspec, fmt
 
 
@@ -84,9 +84,10 @@ def output_paths(stem, output_dir='.'):
 
 def infer_fscale(spres):
     """Choose plot flux scaling based on typical flux level."""
-    cakmask = spres[(spres['lbd'] >= 3900) & (spres['lbd'] <= 4000)]
-    ref = cakmask if len(cakmask) > 0 else spres
-    median_flux = float(np.median(ref['f'].values))
+    lbd = np.asarray(spres['lbd'], dtype=float)
+    cakmask = (lbd >= 3900) & (lbd <= 4000)
+    ref = spres[cakmask] if np.any(cakmask) else spres
+    median_flux = float(np.median(np.asarray(ref['f'], dtype=float)))
     if median_flux > 1.0:
         return 1.0
     return 1e17
@@ -222,10 +223,10 @@ def _read_spectrum_from_hdul(hdul, z):
     if not np.any(valid):
         raise ValueError('No valid spectral pixels found in FITS file.')
 
-    spres = pd.DataFrame({
-        'lbd': wave_rest[valid],
-        'f': flux[valid],
-        'ferr': ferr[valid],
+    spres = Table({
+        'lbd': np.asarray(wave_rest[valid], dtype=float),
+        'f': np.asarray(flux[valid], dtype=float),
+        'ferr': np.asarray(ferr[valid], dtype=float),
     })
     return spres, z
 
@@ -234,14 +235,12 @@ def read_spectrum_ascii(path, z):
     if z is None:
         raise ValueError('ASCII spectra are rest-frame; supply redshift with --z.')
 
-    spres = pd.read_csv(
+    spres = ascii.read(
         path,
+        format='no_header',
         names=['lbd', 'f', 'ferr'],
-        sep=r'\s+',
         comment='#',
     )
-    if spres.empty:
+    if len(spres) == 0:
         raise ValueError('ASCII spectrum file is empty.')
     return spres, z
-
-
