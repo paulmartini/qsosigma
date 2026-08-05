@@ -12,12 +12,16 @@ from matplotlib.ticker import MaxNLocator
 import numpy as np
 from astropy.io import fits
 
-import SpecAnl as sa
-from cak_metrics import CAH_LAB_WAVE, CAK_LAB_WAVE, CAK_METRIC_SUFFIXES, CAK_PREFIX
-from line_metrics import velocity_to_wavelength
+from qsosigma.plot_spec import PlotSpec
+from qsosigma.cak_metrics import CAH_LAB_WAVE, CAK_LAB_WAVE, CAK_METRIC_SUFFIXES, CAK_PREFIX, C_KMS
 
 CAKPLOT_EXT_RE = re.compile(r'^CAKPLOT(\d+)$', re.IGNORECASE)
 VERR_EXT_RE = re.compile(r'^VERR(\d+)$', re.IGNORECASE)
+
+
+def velocity_to_wavelength(v_kms, ref):
+    """Velocity offset (km/s) to rest wavelength (Angstrom) relative to ref."""
+    return ref * (1.0 + v_kms / C_KMS)
 
 
 def _mark_centroid(ax, v_kms, rest_wave, label=None):
@@ -66,7 +70,7 @@ def plot_cak_panels(
     metrics = cak_result.get('metrics', {})
     shade_cak_excluded_regions(ax_data, plot)
     shade_cak_excluded_regions(ax_res, plot)
-    sa.PlotSpec(
+    PlotSpec(
         ax_data, plot['lbd'], plot['flux'], plot['ferr'],
         PLOTERR=False, pixspec=pixspec, linewidth=0.4, erralpha=0.2,
         YLABEL=show_ylabel, XLABEL=False,

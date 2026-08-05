@@ -1,3 +1,7 @@
+"""Tools to broaden and shift templates. 
+   Originally from IronFit by Zhefu Yu"""
+
+
 import numpy as np 
 import astropy
 from astropy.io import fits

@@ -27,7 +27,7 @@ to the verr0 stack, discovers ``verr100/``, … stacks, fits each, and writes
 ``cak_verr_diagnostic_z{zlo}_z{zhi}.png`` (verr panels; disable with ``--no-plot``).
 For each stack the σ* lower fit bound is raised to ``max(20, verr)`` km/s.
 
-Ca K templates: Example_ironfit/stellar_templates/ (see README.md).
+Ca K templates: data/stellar_templates/ (see README.md).
 """
 
 from __future__ import annotations
@@ -44,7 +44,9 @@ import numpy as np
 from astropy.io import fits
 from astropy.table import Table
 
-from cak_metrics import (
+import qsosigma
+
+from qsosigma.cak_metrics import (
     CAK_LAB_WAVE,
     SIGV_MIN,
     cak_is_measurable,
@@ -52,9 +54,9 @@ from cak_metrics import (
     expected_dispersion_kms,
     measure_cak_absorption,
 )
-from cak_plots import plot_cak, plot_cak_verr_diagnostic
-from fit_results import build_cak_plot_hdu, print_cak_summary
-from spectrum_io import flux_label, infer_fscale, load_spectrum, spectrum_stem
+from qsosigma.cak_plots import plot_cak, plot_cak_verr_diagnostic
+from qsosigma.fit_results import build_cak_plot_hdu, print_cak_summary
+from qsosigma.spectrum_io import flux_label, infer_fscale, load_spectrum, spectrum_stem
 
 
 def _cakplot_extname(verr_kms):

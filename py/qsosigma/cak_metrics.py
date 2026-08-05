@@ -33,15 +33,21 @@ import os
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import scipy.optimize
 
-import template_tools as ttools
-from desi_resolution import (
+import qsosigma
+from qsosigma import template_tools as ttools
+
+from qsosigma.desi_resolution import (
     combine_velocity_sigmas,
     desi_spectro_instrumental_sigma_kms_from_rest,
 )
+
+repo_root = next(p for p in Path(__file__).resolve().parents if (p / ".git").exists())
 
 C_KMS = 2.99792458e5
 CAK_LAB_WAVE = 3933.663
@@ -253,8 +259,7 @@ def cak_is_measurable(spres, min_pixels=MIN_PIXELS):
 
 def default_stellar_template_dir():
     return os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        'data', 'stellar_templates',
+        repo_root, 'data', 'stellar_templates',
     )
 
 
@@ -624,7 +629,7 @@ def fit_cak_with_template(
     lbd_min, lbd_max = float(np.min(lbd_all)), float(np.max(lbd_all))
     sig_inst_kms = 0.0
     if z is not None:
-        sig_inst_kms = desi_sm5_instrumental_sigma_kms_from_rest(CAK_LAB_WAVE, z)
+        sig_inst_kms = desi_spectro_instrumental_sigma_kms_from_rest(CAK_LAB_WAVE, z)
     lo, _hi = _resolve_sigv_bounds(sigv_min)
 
     line_half = LINE_HALF_EXCL
@@ -714,7 +719,7 @@ def build_cak_plot_data(spres, fit, lbdtpl, ttpl, z=None):
     depth = fit['depth']
     sig_inst_kms = fit.get('sig_inst_kms', 0.0)
     if z is not None and (sig_inst_kms is None or sig_inst_kms <= 0):
-        sig_inst_kms = desi_sm5_instrumental_sigma_kms_from_rest(CAK_LAB_WAVE, z)
+        sig_inst_kms = desi_spectro_instrumental_sigma_kms_from_rest(CAK_LAB_WAVE, z)
 
     continuum = _powerlaw(lbd, scnt, acnt)
     absorption = _absorption_profile(

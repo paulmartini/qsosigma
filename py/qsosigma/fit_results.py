@@ -6,7 +6,7 @@ import numpy as np
 from astropy.io import fits
 from astropy.table import Table
 
-from cak_metrics import (
+from qsosigma.cak_metrics import (
     CAH_LAB_WAVE,
     CAK_LAB_WAVE,
     CAK_METRIC_SUFFIXES,

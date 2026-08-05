@@ -82,6 +82,15 @@ def output_paths(stem, output_dir='.'):
         'cak': os.path.join(output_dir, '%s_cak.png' % stem),
     }
 
+def infer_fscale(spres):
+    """Choose plot flux scaling based on typical flux level."""
+    cakmask = spres[(spres['lbd'] >= 3900) & (spres['lbd'] <= 4000)]
+    ref = cakmask if len(cakmask) > 0 else spres
+    median_flux = float(np.median(ref['f'].values))
+    if median_flux > 1.0:
+        return 1.0
+    return 1e17
+
 
 def flux_label(fscale):
     if fscale == 1.0:
