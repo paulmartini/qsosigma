@@ -46,7 +46,8 @@ from qsosigma.desi_resolution import (
     desi_spectro_instrumental_sigma_kms_from_rest,
 )
 
-repo_root = next(p for p in Path(__file__).resolve().parents if (p / ".git").exists())
+# Repository root: py/qsosigma/<this file> -> parents[2].
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 C_KMS = 2.99792458e5
 CAK_LAB_WAVE = 3933.663
@@ -280,9 +281,8 @@ def cak_is_measurable(spres, min_pixels=MIN_PIXELS):
 
 
 def default_stellar_template_dir():
-    return os.path.join(
-        repo_root, 'data', 'stellar_templates',
-    )
+    """Return ``data/stellar_templates`` under the repository root."""
+    return os.path.join(str(_REPO_ROOT), 'data', 'stellar_templates')
 
 
 def _sanitize_template_arrays(lbdtpl, ttpl):
