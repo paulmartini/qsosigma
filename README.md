@@ -1,11 +1,10 @@
-========
 qsosigma
 ========
 
 Introduction
 ------------
 
-Tools to measure the stellar velocity dispersion of quasar host galaxies. s
+Tools to measure the stellar velocity dispersion of quasar host galaxies. 
 
 The code currently focuses on just the CaK absorption line and has been tested with stacked DESI quasar spectra. 
 
@@ -23,8 +22,8 @@ The main script to measure the CaK absorption line is **bin/run_cakfit.py**.
 
 Use the **--help** option for further documentation. 
 
-Tour of Code
-------------
+Tour of the Code
+----------------
 
 Here is a brief description of the repository layout
 
@@ -32,7 +31,7 @@ Here is a brief description of the repository layout
 
 **py/qsosigma** : packages
 
-**data** : stellar templates
+**data/stellar_templates** : stellar templates
 
 
 Acknowledgements
