@@ -27,11 +27,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from qsosigma.cak_plots import (
+    AXIS_LABEL_FONTSIZE,
     discover_results_files,
     figure_output_path,
     load_cak_plot_snapshot,
     stem_from_results,
 )
+
+# Match the heavier verr-diagnostic axis typography.
+TICK_FONTSIZE = 14
 
 
 def parse_args():
@@ -116,7 +120,11 @@ def load_dispersion_points(paths):
     return points, skipped
 
 
-def plot_cak_vs_redshift(points, output_path, dpi=150):
+def plot_cak_vs_redshift(
+    points, output_path, dpi=150,
+    label_fontsize=AXIS_LABEL_FONTSIZE,
+    tick_fontsize=TICK_FONTSIZE,
+):
     """Save sigma_* versus redshift with black points and error bars."""
     z = np.asarray([p['z'] for p in points], dtype=float)
     sig = np.asarray([p['sig'] for p in points], dtype=float)
@@ -129,9 +137,9 @@ def plot_cak_vs_redshift(points, output_path, dpi=150):
         elinewidth=1.2, capsize=3, markersize=6, markerfacecolor='k',
         markeredgecolor='k', linestyle='none',
     )
-    ax.set_xlabel('Redshift', fontsize=14)
-    ax.set_ylabel('Stellar Velocity Dispersion (km/s)', fontsize=14)
-    ax.tick_params(axis='both', labelsize=12)
+    ax.set_xlabel('Redshift', fontsize=label_fontsize)
+    ax.set_ylabel('Stellar Velocity Dispersion (km/s)', fontsize=label_fontsize)
+    ax.tick_params(axis='both', labelsize=tick_fontsize)
     ax.set_xlim(left=max(0.0, float(np.min(z)) - 0.02))
     ax.set_ylim(bottom=0.0)
     fig.tight_layout()
