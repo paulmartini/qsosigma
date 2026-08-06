@@ -686,27 +686,29 @@ def run_validate(args):
         plot_entries = []
         for entry in entries:
             cak_result = entry['cak_result']
+            metrics = dict(cak_result['metrics'])
+            n_tpl = len(cak_result.get('all_templates') or [])
+            if n_tpl > 0:
+                metrics.setdefault('N_TEMPLATES', float(n_tpl))
+            if entry.get('expected_disp') is not None:
+                metrics.setdefault('EXPECTED_DISP', float(entry['expected_disp']))
             plot_entries.append({
                 'verr_kms': float(entry['verr_kms']),
                 'snapshot': {
                     'plot': cak_result['plot'],
-                    'metrics': cak_result['metrics'],
+                    'metrics': metrics,
                     'z': float(entry['z']),
+                    'zlo': float(args.zlo),
+                    'zhi': float(args.zhi),
                     'pixspec': float(entry.get('pixspec', np.nan)),
                     'flux_unit': entry.get('flux_unit'),
                 },
                 'path': entry.get('path') or out_fits,
             })
-        ylabel = next(
-            (e.get('flux_unit') for e in entries if e.get('flux_unit')),
-            'Relative Flux',
-        )
-        title = 'Ca II K, %s' % tag.replace('_', ' ')
         plot_cak_verr_diagnostic(
             plot_entries,
             out_png,
-            title=title,
-            ylabel=ylabel,
+            ylabel='Relative Flux and Fit Residual',
         )
     return 0
 

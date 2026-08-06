@@ -11,9 +11,7 @@ labels 0/100/200/300/400 km/s).
 Example
 -------
   python bin/plot_cak_verr_diagnostic.py \\
-    /path/to/cak_fitresults_z0.250_z0.300.fits \\
-    -o cak_verr_diagnostic.png \\
-    --title "QSO stack, z = 0.25–0.30"
+    /path/to/cak_fitresults_z0.250_z0.300.fits
 
   python bin/plot_cak_verr_diagnostic.py \\
     verr0/stack_cakfit.fits \\
@@ -21,13 +19,14 @@ Example
     verr200/stack_cakfit.fits \\
     verr300/stack_cakfit.fits \\
     verr400/stack_cakfit.fits \\
-    -o cak_verr_diagnostic.png
+    -o cak_verr_diagnostic_z0.250_z0.300.png
 """
 
 from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -45,6 +44,8 @@ from qsosigma.cak_plots import (
 )
 
 DEFAULT_VERR_KMS = (0, 100, 200, 300, 400)
+STACK_ZBIN_RE = re.compile(r'_z(\d+\.\d+)_z(\d+\.\d+)(?:_|$|\.)')
+DEFAULT_YLABEL = 'Relative Flux and Fit Residual'
 
 
 def parse_args():
@@ -64,8 +65,12 @@ def parse_args():
     )
     parser.add_argument(
         '-o', '--output',
-        default='cak_verr_diagnostic.png',
-        help='Output PNG path (default: cak_verr_diagnostic.png)',
+        default=None,
+        help=(
+            'Output PNG path (default: '
+            'cak_verr_diagnostic_z{zlo}_z{zhi}.png when the redshift bin '
+            'is known, else cak_verr_diagnostic.png)'
+        ),
     )
     parser.add_argument(
         '--verr',
@@ -81,12 +86,12 @@ def parse_args():
     parser.add_argument(
         '--title',
         default=None,
-        help='Optional figure title (e.g. redshift range of the stack)',
+        help='Optional figure title (none by default)',
     )
     parser.add_argument(
         '--ylabel',
-        default='Relative Flux',
-        help='Shared y-axis label (default: Relative Flux)',
+        default=DEFAULT_YLABEL,
+        help='Shared y-axis label (default: %s)' % DEFAULT_YLABEL,
     )
     parser.add_argument(
         '--dpi',
@@ -95,6 +100,39 @@ def parse_args():
         help='Figure DPI (default: 150)',
     )
     return parser.parse_args()
+
+
+def redshift_bin_tag(zlo, zhi):
+    return 'z%.3f_z%.3f' % (float(zlo), float(zhi))
+
+
+def parse_redshift_bin_from_name(path):
+    """Return ``(zlo, zhi)`` from a filename tag, or ``(None, None)``."""
+    match = STACK_ZBIN_RE.search(os.path.basename(path))
+    if not match:
+        return None, None
+    return float(match.group(1)), float(match.group(2))
+
+
+def resolve_redshift_bin(paths, entries):
+    """Best-effort ``(zlo, zhi)`` from FITS snapshots or input filenames."""
+    for entry in entries:
+        snapshot = entry.get('snapshot') or {}
+        zlo = snapshot.get('zlo', np.nan)
+        zhi = snapshot.get('zhi', np.nan)
+        if np.isfinite(zlo) and np.isfinite(zhi):
+            return float(zlo), float(zhi)
+    for path in paths:
+        zlo, zhi = parse_redshift_bin_from_name(path)
+        if zlo is not None and zhi is not None:
+            return zlo, zhi
+    return None, None
+
+
+def default_output_path(zlo, zhi):
+    if zlo is not None and zhi is not None:
+        return 'cak_verr_diagnostic_%s.png' % redshift_bin_tag(zlo, zhi)
+    return 'cak_verr_diagnostic.png'
 
 
 def load_verr_entries_from_files(paths, verr_values):
@@ -113,15 +151,6 @@ def load_verr_entries_from_files(paths, verr_values):
     return entries
 
 
-def _default_title_from_fitresults(path):
-    base = os.path.basename(path)
-    for prefix in ('cak_fitresults_', 'cak_validate_'):
-        if base.startswith(prefix) and base.endswith('.fits'):
-            tag = base[len(prefix):-len('.fits')]
-            return 'Ca II K fit results, %s' % tag.replace('_', ' ')
-    return None
-
-
 def main():
     args = parse_args()
     paths = [os.path.abspath(path) for path in args.inputs]
@@ -130,7 +159,6 @@ def main():
             print('ERROR: File not found: %s' % path, file=sys.stderr)
             return 2
 
-    title = args.title
     if len(paths) == 1 and is_cak_fitresults_fits(paths[0]):
         entries = load_cak_fitresults_verr_entries(paths[0])
         if not entries:
@@ -141,8 +169,6 @@ def main():
                 file=sys.stderr,
             )
             return 1
-        if title is None:
-            title = _default_title_from_fitresults(paths[0])
     elif len(paths) == 5:
         entries = load_verr_entries_from_files(paths, args.verr)
         if entries is None:
@@ -155,6 +181,9 @@ def main():
         )
         return 2
 
+    zlo, zhi = resolve_redshift_bin(paths, entries)
+    output = args.output if args.output is not None else default_output_path(zlo, zhi)
+
     print('Plotting Ca K verr diagnostic:')
     for entry in entries:
         sig = entry['snapshot']['metrics'].get('CAK_STELLAR_DISP', np.nan)
@@ -166,8 +195,8 @@ def main():
 
     plot_cak_verr_diagnostic(
         entries,
-        os.path.abspath(args.output),
-        title=title,
+        os.path.abspath(output),
+        title=args.title,
         ylabel=args.ylabel,
         dpi=args.dpi,
     )

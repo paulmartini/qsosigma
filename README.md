@@ -78,7 +78,7 @@ Default products are named ``cak_fitresults_z{zlo}_z{zhi}.fits``. With
 lower bound is raised to ``max(20, verr)`` km/s on those stacks.::
 
     python bin/plot_cak_verr_diagnostic.py cak_fitresults_z0.250_z0.300.fits
-    python bin/plot_cak_multipanel.py "cak_fitresults_*.fits" -o cak_spectra.png
+    python bin/plot_cak_multipanel.py cak_fitresults*.fits -o cak_spectra.png
 
 (``plot_cak_multipanel.py`` uses the verr0 panel from each multi-stack file.)
 

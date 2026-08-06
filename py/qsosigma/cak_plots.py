@@ -23,6 +23,19 @@ TICK_LABELSIZE = 12
 LEGEND_FONTSIZE = 12
 MULTIPANEL_LEGEND_FONTSIZE = 14
 PANEL_LABEL_FONTSIZE = 14
+AXIS_LABEL_FONTSIZE = 18
+
+# Heavier styling for the verr-diagnostic figure.
+VERR_TICK_LABELSIZE = 14
+VERR_LEGEND_FONTSIZE = 14
+VERR_PANEL_LABEL_FONTSIZE = 16
+VERR_AXIS_LABEL_FONTSIZE = 20
+VERR_LINEWIDTH_DATA = 0.8
+VERR_LINEWIDTH_CONTINUUM = 1.6
+VERR_LINEWIDTH_MODEL = 2.0
+VERR_LINEWIDTH_VLINE = 1.3
+VERR_LINEWIDTH_RESIDUAL = 0.8
+VERR_ELINEWIDTH = 0.8
 
 
 def velocity_to_wavelength(v_kms, ref):
@@ -38,13 +51,36 @@ def _mark_centroid(ax, v_kms, rest_wave, label=None):
     ax.axvline(wave, color='r', linestyle='--', linewidth=1.0, label=label)
 
 
-def _panel_label(ax, text, fontsize=PANEL_LABEL_FONTSIZE):
-    """Draw an upper-left panel annotation."""
+def _panel_label(ax, text, fontsize=PANEL_LABEL_FONTSIZE, loc='upper left'):
+    """Draw a panel annotation in the upper-left or upper-right corner."""
+    if loc == 'upper right':
+        x, ha = 0.97, 'right'
+    else:
+        x, ha = 0.03, 'left'
     ax.text(
-        0.03, 0.97, text, transform=ax.transAxes,
-        ha='left', va='top', fontsize=fontsize,
+        x, 0.97, text, transform=ax.transAxes,
+        ha=ha, va='top', fontsize=fontsize,
         bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.7, ec='none'),
     )
+
+
+def is_verr_bad_fit(snapshot: Dict) -> bool:
+    """
+    True if measured sigma_* exceeds EXPECTED_DISP by more than 2*ERR.
+
+    Uses ``CAK_STELLAR_DISP``, ``EXPECTED_DISP``, and ``CAK_STELLAR_DISP_ERR``
+    (falling back to the inverse-variance error when ERR is missing).
+    """
+    metrics = snapshot.get('metrics', {})
+    sig = metrics.get('CAK_STELLAR_DISP', np.nan)
+    expected = metrics.get('EXPECTED_DISP', np.nan)
+    err = metrics.get('CAK_STELLAR_DISP_ERR', np.nan)
+    if not np.isfinite(err) or err <= 0:
+        ivar = metrics.get('CAK_STELLAR_DISP_IVAR', 0.0)
+        err = (1.0 / np.sqrt(ivar)) if ivar > 0 else np.nan
+    if not (np.isfinite(sig) and np.isfinite(expected) and np.isfinite(err) and err > 0):
+        return False
+    return sig > expected + 2.0 * err
 
 
 def shade_cak_excluded_regions(ax, plot):
@@ -73,6 +109,16 @@ def plot_cak_panels(
     ax_data, ax_res, cak_result, ylabel, pixspec,
     panel_label='Ca II K', show_legend=True, show_ylabel=True,
     xlim=None, show_reference_template=False, show_centroid=False,
+    legend_loc='lower right',
+    tick_labelsize=TICK_LABELSIZE,
+    legend_fontsize=LEGEND_FONTSIZE,
+    panel_label_fontsize=PANEL_LABEL_FONTSIZE,
+    linewidth_data=0.4,
+    linewidth_continuum=1.0,
+    linewidth_model=1.2,
+    linewidth_vline=0.8,
+    linewidth_residual=0.4,
+    elinewidth=0.4,
 ):
     """Draw Ca K data/model and residual panels on existing axes."""
     plot = cak_result['plot']
@@ -81,26 +127,34 @@ def plot_cak_panels(
     shade_cak_excluded_regions(ax_res, plot)
     PlotSpec(
         ax_data, plot['lbd'], plot['flux'], plot['ferr'],
-        PLOTERR=False, pixspec=pixspec, linewidth=0.4, erralpha=0.2,
+        PLOTERR=False, pixspec=pixspec, linewidth=linewidth_data, erralpha=0.2,
         YLABEL=show_ylabel, XLABEL=False,
     )
-    ax_data.plot(plot['lbd'], plot['continuum'], '--', color='0.5', linewidth=1.0,
-                 label='Power Law Continuum')
+    ax_data.plot(
+        plot['lbd'], plot['continuum'], '--', color='0.5',
+        linewidth=linewidth_continuum, label='Power Law Continuum',
+    )
     if show_reference_template and 'template_broad' in plot:
         sig_tpl = plot.get('template_sig_kms', np.nan)
         tpl_label = ' ({:.0f} km/s)'.format(sig_tpl) if np.isfinite(sig_tpl) else ''
         ax_data.plot(
-            plot['lbd'], plot['template_broad'], '--', color='b', linewidth=1.0,
+            plot['lbd'], plot['template_broad'], '--', color='b',
+            linewidth=linewidth_continuum,
             label='Reference' + tpl_label,
         )
-    ax_data.plot(plot['lbd'], plot['model'], '-', color='r', linewidth=1.2,
-                 label='Best Fit Template')
+    ax_data.plot(
+        plot['lbd'], plot['model'], '-', color='r',
+        linewidth=linewidth_model, label='Best Fit Template',
+    )
     rest_wave = plot.get('rest_wave', CAK_LAB_WAVE)
-    ax_data.axvline(rest_wave, color='k', linestyle=':', linewidth=0.8,
-                    label='Ca II K')
+    ax_data.axvline(
+        rest_wave, color='k', linestyle=':', linewidth=linewidth_vline,
+        label=r'Ca K, Ca H + H$\epsilon$',
+    )
     cah_wave = plot.get('cah_wave', CAH_LAB_WAVE)
-    ax_data.axvline(cah_wave, color='0.5', linestyle=':', linewidth=0.8,
-                    label=r'Ca II H + H$\epsilon$')
+    ax_data.axvline(
+        cah_wave, color='k', linestyle=':', linewidth=linewidth_vline,
+    )
     if show_centroid:
         _mark_centroid(
             ax_data, metrics.get('CAK_CENTROID', np.nan), rest_wave,
@@ -111,23 +165,27 @@ def plot_cak_panels(
     else:
         ax_data.set_ylabel('')
     ax_data.set_title('')
-    _panel_label(ax_data, panel_label)
+    _panel_label(ax_data, panel_label, fontsize=panel_label_fontsize)
     if xlim is not None:
         ax_data.set_xlim(xlim)
     else:
         ax_data.set_xlim((plot['lbd'].min(), plot['lbd'].max()))
-    ax_data.tick_params(axis='both', labelsize=TICK_LABELSIZE, labelbottom=False)
+    ax_data.tick_params(axis='both', labelsize=tick_labelsize, labelbottom=False)
     if show_legend:
-        ax_data.legend(loc='lower right', fontsize=LEGEND_FONTSIZE)
+        ax_data.legend(loc=legend_loc, fontsize=legend_fontsize)
 
-    ax_res.errorbar(plot['lbd'], plot['residuals'], yerr=plot['ferr'], fmt='none',
-                    ecolor='0.7', elinewidth=0.4, alpha=0.5)
-    ax_res.plot(plot['lbd'], plot['residuals'], 'k-', linewidth=0.4)
-    ax_res.axhline(0.0, color='k', linewidth=0.8)
+    ax_res.errorbar(
+        plot['lbd'], plot['residuals'], yerr=plot['ferr'], fmt='none',
+        ecolor='0.7', elinewidth=elinewidth, alpha=0.5,
+    )
+    ax_res.plot(
+        plot['lbd'], plot['residuals'], 'k-', linewidth=linewidth_residual,
+    )
+    ax_res.axhline(0.0, color='k', linewidth=linewidth_vline)
     if xlim is not None:
         ax_res.set_xlim(xlim)
-    format_cak_wavelength_axis(ax_res)
-    ax_res.tick_params(axis='both', labelsize=TICK_LABELSIZE)
+    format_cak_wavelength_axis(ax_res, labelsize=tick_labelsize)
+    ax_res.tick_params(axis='both', labelsize=tick_labelsize)
 
 
 def plot_cak(cak_result, ylabel, pixspec, output_path):
@@ -181,7 +239,10 @@ def _metrics_from_table_hdu(hdu) -> Dict:
         err_key = '%s_ERR' % key
         if err_key in names:
             metrics[err_key] = float(row[err_key])
-    for key in ('CAK_CHI2', 'CAK_CHI2_DOF', 'CAK_AT_BOUND', 'EXPECTED_DISP', 'VERR_KMS'):
+    for key in (
+        'CAK_CHI2', 'CAK_CHI2_DOF', 'CAK_AT_BOUND', 'EXPECTED_DISP', 'VERR_KMS',
+        'N_TEMPLATES',
+    ):
         if key in names:
             metrics[key] = float(row[key])
 
@@ -251,20 +312,32 @@ def _plot_hdu_for_verr(hdul, verr_kms: Optional[float] = None):
     return hdul[best[1]]
 
 
+def _redshift_bin_from_headers(*headers):
+    """Return ``(zlo, zhi)`` from the first header that has CAK ZLO/ZHI."""
+    for header in headers:
+        if header is None:
+            continue
+        if 'CAK ZLO' in header and 'CAK ZHI' in header:
+            return float(header['CAK ZLO']), float(header['CAK ZHI'])
+    return np.nan, np.nan
+
+
 def _snapshot_from_hdus(plot_hdu, metrics_hdu, primary_header=None) -> Dict:
     """Assemble a plotting snapshot dict from plot and metrics HDUs."""
     plot = _plot_dict_from_cak_plot_hdu(plot_hdu)
     metrics = _metrics_from_table_hdu(metrics_hdu)
     cak_header = plot_hdu.header
     metrics_header = metrics_hdu.header if metrics_hdu is not None else {}
+    zlo, zhi = _redshift_bin_from_headers(
+        primary_header, metrics_header, cak_header,
+    )
     z = np.nan
     for header in (cak_header, metrics_header, primary_header or {}):
         if header is not None and 'Z' in header:
             z = float(header['Z'])
             break
-        if header is not None and 'CAK ZLO' in header and 'CAK ZHI' in header:
-            z = 0.5 * (float(header['CAK ZLO']) + float(header['CAK ZHI']))
-            break
+    if not np.isfinite(z) and np.isfinite(zlo) and np.isfinite(zhi):
+        z = 0.5 * (zlo + zhi)
     infile = str(
         cak_header.get('INFILE', metrics_header.get('INFILE', ''))
     ).strip()
@@ -279,6 +352,8 @@ def _snapshot_from_hdus(plot_hdu, metrics_hdu, primary_header=None) -> Dict:
         'plot': plot,
         'metrics': metrics,
         'z': z,
+        'zlo': zlo,
+        'zhi': zhi,
         'infile': infile,
         'flux_unit': flux_unit,
         'pixspec': pixspec,
@@ -401,25 +476,49 @@ def format_multipanel_label(snapshot: Dict) -> str:
     return '\n'.join(parts) if parts else 'Ca II K'
 
 
-def format_verr_panel_label(verr_kms, snapshot: Dict) -> str:
-    """Build upper-left annotation with injected verr and measured stellar dispersion."""
+def format_verr_panel_label(verr_kms, snapshot: Dict, top_panel=False) -> str:
+    """
+    Build upper-left annotation for a verr-diagnostic panel.
+
+    Top panel: central redshift, then measured sigma_* (with N_TEMPLATES).
+    Other panels: measured sigma_*, then injected sigma_verr.
+    """
     metrics = snapshot.get('metrics', {})
     sig = metrics.get('CAK_STELLAR_DISP', np.nan)
     ivar = metrics.get('CAK_STELLAR_DISP_IVAR', 0.0)
     err = (1.0 / np.sqrt(ivar)) if ivar > 0 else np.nan
+    n_tpl = metrics.get('N_TEMPLATES', np.nan)
 
-    parts = [r'$\sigma_{\rm verr} = %d$ km/s' % int(round(float(verr_kms)))]
+    sig_text = None
     if np.isfinite(sig):
         sig_i = int(round(sig))
         if np.isfinite(err):
-            err_i = int(round(err))
-            parts.append(r'$\sigma_* = %d \pm %d$ km/s' % (sig_i, err_i))
+            sig_text = r'$\sigma_* = %d \pm %d$ km/s' % (sig_i, int(round(err)))
         else:
-            parts.append(r'$\sigma_* = %d$ km/s' % sig_i)
-    chi2 = metrics.get('CAK_CHI2', np.nan)
-    chi2_dof = metrics.get('CAK_CHI2_DOF', np.nan)
-    if np.isfinite(chi2) and np.isfinite(chi2_dof) and chi2_dof > 0:
-        parts.append(r'$\chi^2/\mathrm{dof} = %.1f$' % (chi2 / chi2_dof))
+            sig_text = r'$\sigma_* = %d$ km/s' % sig_i
+        if np.isfinite(n_tpl) and n_tpl > 0:
+            sig_text += ' (%d)' % int(round(n_tpl))
+
+    verr_text = r'$\sigma_{\rm verr} = %d$ km/s' % int(round(float(verr_kms)))
+
+    if top_panel:
+        parts = []
+        z = snapshot.get('z', np.nan)
+        if not np.isfinite(z):
+            zlo = snapshot.get('zlo', np.nan)
+            zhi = snapshot.get('zhi', np.nan)
+            if np.isfinite(zlo) and np.isfinite(zhi):
+                z = 0.5 * (zlo + zhi)
+        if np.isfinite(z):
+            parts.append(r'$z = %.3f$' % z)
+        if sig_text is not None:
+            parts.append(sig_text)
+        return '\n'.join(parts) if parts else 'Ca II K'
+
+    parts = []
+    if sig_text is not None:
+        parts.append(sig_text)
+    parts.append(verr_text)
     return '\n'.join(parts)
 
 
@@ -453,7 +552,7 @@ def plot_cak_verr_diagnostic(
     entries,
     output_path,
     title=None,
-    ylabel='Relative Flux',
+    ylabel='Relative Flux and Fit Residual',
     dpi=150,
     panel_width=8.0,
     panel_height=3.2,
@@ -462,8 +561,11 @@ def plot_cak_verr_diagnostic(
     Save a 1-column Ca K figure comparing fits at increasing sigma_verr.
 
     Each entry is a dict with ``verr_kms`` and ``snapshot`` keys. Panels are
-    drawn top-to-bottom in entry order. A shared legend is placed below the
-    stack; sigma_verr and measured sigma_* annotations appear in each panel.
+    drawn top-to-bottom in entry order with shared x-limits. The line legend is
+    placed in the upper-right of the top panel. The top-panel annotation shows
+    central redshift and measured sigma_*; lower panels show sigma_* then
+    sigma_verr. Lower panels also show ``FAILED`` (upper right) when
+    ``CAK_STELLAR_DISP > EXPECTED_DISP + 2 * CAK_STELLAR_DISP_ERR``.
 
     Returns the last panel's ``{plot, metrics}`` (for optional reuse).
     """
@@ -479,9 +581,7 @@ def plot_cak_verr_diagnostic(
     outer = GridSpec(n_panels, 1, figure=fig)
 
     ref_ax_data = None
-    ref_ax_res = None
-    res_axes_by_row = {}
-    data_axes = []
+    panel_axes = []  # (ax_data, ax_res, index)
 
     for index, entry in enumerate(entries):
         snapshot = entry['snapshot']
@@ -490,10 +590,9 @@ def plot_cak_verr_diagnostic(
             ax_data = fig.add_subplot(inner[0, 0])
             ax_res = fig.add_subplot(inner[1, 0], sharex=ax_data)
             ref_ax_data = ax_data
-            ref_ax_res = ax_res
         else:
             ax_data = fig.add_subplot(inner[0, 0], sharex=ref_ax_data)
-            ax_res = fig.add_subplot(inner[1, 0], sharex=ref_ax_res)
+            ax_res = fig.add_subplot(inner[1, 0], sharex=ref_ax_data)
 
         pixspec = snapshot.get('pixspec', np.nan)
         if not np.isfinite(pixspec):
@@ -502,47 +601,54 @@ def plot_cak_verr_diagnostic(
 
         plot_cak_panels(
             ax_data, ax_res, _snapshot_cak_result(snapshot), ylabel, pixspec,
-            panel_label=format_verr_panel_label(entry['verr_kms'], snapshot),
-            show_legend=False,
+            panel_label=format_verr_panel_label(
+                entry['verr_kms'], snapshot, top_panel=(index == 0),
+            ),
+            show_legend=(index == 0),
             show_ylabel=False,
             xlim=xlim,
             show_reference_template=False,
+            legend_loc='upper right',
+            tick_labelsize=VERR_TICK_LABELSIZE,
+            legend_fontsize=VERR_LEGEND_FONTSIZE,
+            panel_label_fontsize=VERR_PANEL_LABEL_FONTSIZE,
+            linewidth_data=VERR_LINEWIDTH_DATA,
+            linewidth_continuum=VERR_LINEWIDTH_CONTINUUM,
+            linewidth_model=VERR_LINEWIDTH_MODEL,
+            linewidth_vline=VERR_LINEWIDTH_VLINE,
+            linewidth_residual=VERR_LINEWIDTH_RESIDUAL,
+            elinewidth=VERR_ELINEWIDTH,
         )
-        data_axes.append(ax_data)
-        res_axes_by_row.setdefault(index, []).append(ax_res)
-
-    for ax in data_axes:
-        ax.set_ylabel('')
-
-    for row, axes in res_axes_by_row.items():
-        for ax in axes:
-            ax.set_xlim(xlim)
-            ax.set_xlabel('')
-            format_cak_wavelength_axis(ax)
-            if row < n_panels - 1:
-                ax.set_xticklabels([])
-            else:
-                ax.tick_params(axis='both', labelsize=TICK_LABELSIZE)
+        if index > 0 and is_verr_bad_fit(snapshot):
+            _panel_label(
+                ax_data, 'FAILED',
+                fontsize=VERR_PANEL_LABEL_FONTSIZE, loc='upper right',
+            )
+        panel_axes.append((ax_data, ax_res, index))
 
     if ref_ax_data is not None:
         ref_ax_data.set_xlim(xlim)
 
-    legend_handles, legend_labels = _legend_handles_from_snapshot(
-        entries[0]['snapshot'], ylabel, show_reference_template=False,
-    )
-    if legend_handles:
-        fig.legend(
-            legend_handles, legend_labels,
-            loc='lower center', bbox_to_anchor=(0.5, 0.02),
-            ncol=2, fontsize=MULTIPANEL_LEGEND_FONTSIZE, frameon=True,
+    for ax_data, ax_res, index in panel_axes:
+        ax_data.set_ylabel('')
+        ax_res.set_xlabel('')
+        format_cak_wavelength_axis(ax_res, labelsize=VERR_TICK_LABELSIZE)
+        show_x = index == n_panels - 1
+        ax_data.tick_params(
+            axis='both', labelsize=VERR_TICK_LABELSIZE, labelbottom=False,
+        )
+        ax_res.tick_params(
+            axis='both', labelsize=VERR_TICK_LABELSIZE, labelbottom=show_x,
         )
 
     if title:
-        fig.suptitle(title, fontsize=16, y=0.995)
+        fig.suptitle(title, fontsize=VERR_AXIS_LABEL_FONTSIZE, y=0.995)
 
-    fig.tight_layout(rect=[0.06, 0.05, 1.0, 0.98 if title else 1.0])
-    fig.supxlabel(r'Wavelength ($\mathrm{\AA}$)', fontsize=16)
-    fig.supylabel(ylabel, fontsize=16)
+    fig.tight_layout(rect=[0.06, 0.04, 1.0, 0.98 if title else 1.0])
+    fig.supxlabel(
+        r'Wavelength ($\mathrm{\AA}$)', fontsize=VERR_AXIS_LABEL_FONTSIZE,
+    )
+    fig.supylabel(ylabel, fontsize=VERR_AXIS_LABEL_FONTSIZE)
     fig.savefig(output_path, dpi=dpi)
     plt.close(fig)
     print('Ca K verr diagnostic figure saved: %s (%d panels)' % (output_path, n_panels))
