@@ -4,11 +4,19 @@ qsosigma
 Introduction
 ------------
 
-Tools to measure the stellar velocity dispersion of quasar host galaxies.
+Tools to measure the stellar velocity dispersion of a quasar host galaxy.
 
-The code currently focuses on the Ca II K absorption line and has been tested
-with stacked DESI quasar spectra. Validation tools and plotting scripts are
-included.
+The code focuses on the Ca II K absorption line and has been tested with stacked 
+DESI quasar spectra. 
+
+There is a validation mode that will run on multiple stacks of the same quasar sample 
+that have had different amounts of redshift errors added at the catalog level before stacking. 
+The validation tests if the code recovers the expected increase in velocity dispersion due to 
+the artificially increased redshift errors. 
+
+The quasar stacking code is not part of this repository.
+
+There are a number of plotting scripts.
 
 Dependencies
 ------------
@@ -91,4 +99,5 @@ Tour of the Code
 Acknowledgements
 ----------------
 
-Parts of the code were constructed with help from the Cursor AI-powered code editor and GitHub Copilot.
+Parts of the code were constructed with help from the Cursor AI-powered code editor and GitHub Copilot. The template tools were originally developed for ``IronFit`` (see Yu, Martini, et al. 2021).
+
