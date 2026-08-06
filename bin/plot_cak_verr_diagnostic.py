@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import re
 import sys
 from pathlib import Path
 
@@ -40,11 +39,12 @@ from qsosigma.cak_plots import (
     is_cak_fitresults_fits,
     load_cak_fitresults_verr_entries,
     load_cak_plot_snapshot,
+    parse_redshift_bin_from_name,
     plot_cak_verr_diagnostic,
+    redshift_bin_tag,
 )
 
 DEFAULT_VERR_KMS = (0, 100, 200, 300, 400)
-STACK_ZBIN_RE = re.compile(r'_z(\d+\.\d+)_z(\d+\.\d+)(?:_|$|\.)')
 DEFAULT_YLABEL = 'Relative Flux and Fit Residual'
 
 
@@ -100,18 +100,6 @@ def parse_args():
         help='Figure DPI (default: 150)',
     )
     return parser.parse_args()
-
-
-def redshift_bin_tag(zlo, zhi):
-    return 'z%.3f_z%.3f' % (float(zlo), float(zhi))
-
-
-def parse_redshift_bin_from_name(path):
-    """Return ``(zlo, zhi)`` from a filename tag, or ``(None, None)``."""
-    match = STACK_ZBIN_RE.search(os.path.basename(path))
-    if not match:
-        return None, None
-    return float(match.group(1)), float(match.group(2))
 
 
 def resolve_redshift_bin(paths, entries):
