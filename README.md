@@ -99,5 +99,5 @@ Tour of the Code
 Acknowledgements
 ----------------
 
-Parts of the code were constructed with help from the Cursor AI-powered code editor and GitHub Copilot. The template tools were originally developed for ``IronFit`` (see Yu, Martini, et al. 2021).
+Parts of the code were constructed with help from the Cursor AI-powered code editor and GitHub Copilot. The template tools were originally developed for ``IronFit`` [see Yu, Martini, et al. 2021](https://ui.adsabs.harvard.edu/abs/2021MNRAS.507.3771Y/abstract).
 

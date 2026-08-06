@@ -53,9 +53,9 @@ Templates should span **3800–4100 Å** so they include **Ca II K (3933.663 Å)
 
 Use `build_stellar_templates.py` at the repository root.
 
-Most of the existing templates originate from the UVES-POP program. To add more, download original resolution fits files from https://sl.voxastro.org/library/UVES-POP. 
+Most of the existing templates originate from the UVES-POP program [see Borisov et al. 2023](https://ui.adsabs.harvard.edu/abs/2023ApJS..266...11B/abstract). To add more, download original resolution UVES-POP fits files from the [VOXAstro Stellar Libraries](https://sl.voxastro.org/). 
 
-The templates in the repository are lightweight files with just the CaK region. Here is how to create a template from a spectrum
+The templates in the repository are lightweight files with just the CaK region. Here is how to create a template from a fits file 
 
 ```bash
 python build_stellar_templates.py HD107446_R80k.fits \
