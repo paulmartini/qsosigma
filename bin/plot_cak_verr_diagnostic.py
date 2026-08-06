@@ -36,6 +36,7 @@ if _PY_DIR.is_dir() and str(_PY_DIR) not in sys.path:
 import numpy as np
 
 from qsosigma.cak_plots import (
+    figure_output_path,
     is_cak_fitresults_fits,
     load_cak_fitresults_verr_entries,
     load_cak_plot_snapshot,
@@ -67,10 +68,15 @@ def parse_args():
         '-o', '--output',
         default=None,
         help=(
-            'Output PNG path (default: '
+            'Output figure path (default: '
             'cak_verr_diagnostic_z{zlo}_z{zhi}.png when the redshift bin '
-            'is known, else cak_verr_diagnostic.png)'
+            'is known, else cak_verr_diagnostic.png; use --pdf for .pdf)'
         ),
+    )
+    parser.add_argument(
+        '--pdf',
+        action='store_true',
+        help='Write PDF instead of PNG (adjusts the output extension)',
     )
     parser.add_argument(
         '--verr',
@@ -171,6 +177,7 @@ def main():
 
     zlo, zhi = resolve_redshift_bin(paths, entries)
     output = args.output if args.output is not None else default_output_path(zlo, zhi)
+    output = figure_output_path(os.path.abspath(output), pdf=args.pdf)
 
     print('Plotting Ca K verr diagnostic:')
     for entry in entries:
@@ -183,7 +190,7 @@ def main():
 
     plot_cak_verr_diagnostic(
         entries,
-        os.path.abspath(output),
+        output,
         title=args.title,
         ylabel=args.ylabel,
         dpi=args.dpi,

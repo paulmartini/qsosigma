@@ -490,6 +490,21 @@ def discover_results_files(inputs: Iterable[str]) -> List[str]:
 discover_linefit_files = discover_results_files
 
 
+def figure_output_path(path: str, pdf: bool = False) -> str:
+    """
+    Return ``path`` with a ``.pdf`` or ``.png`` figure extension.
+
+    Replaces an existing ``.png`` / ``.pdf`` suffix (or empty extension);
+    other suffixes are left unchanged and the requested extension is appended.
+    """
+    path = str(path)
+    root, ext = os.path.splitext(path)
+    wanted = '.pdf' if pdf else '.png'
+    if ext.lower() in ('', '.png', '.pdf'):
+        return root + wanted
+    return path + wanted
+
+
 def redshift_bin_tag(zlo, zhi) -> str:
     """Format a redshift-bin tag as ``z{zlo}_z{zhi}`` with three decimals."""
     return 'z%.3f_z%.3f' % (float(zlo), float(zhi))

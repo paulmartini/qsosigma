@@ -28,6 +28,7 @@ import numpy as np
 
 from qsosigma.cak_plots import (
     discover_results_files,
+    figure_output_path,
     load_cak_plot_snapshot,
     stem_from_results,
 )
@@ -51,7 +52,12 @@ def parse_args():
     parser.add_argument(
         '-o', '--output',
         default='cak_vs_redshift.png',
-        help='Output PNG path (default: cak_vs_redshift.png)',
+        help='Output figure path (default: cak_vs_redshift.png)',
+    )
+    parser.add_argument(
+        '--pdf',
+        action='store_true',
+        help='Write PDF instead of PNG (adjusts the output extension)',
     )
     parser.add_argument(
         '--dpi',
@@ -165,7 +171,7 @@ def main():
 
     plot_cak_vs_redshift(
         points,
-        os.path.abspath(args.output),
+        figure_output_path(os.path.abspath(args.output), pdf=args.pdf),
         dpi=args.dpi,
     )
     return 0

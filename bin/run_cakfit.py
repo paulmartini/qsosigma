@@ -14,7 +14,8 @@ are the 16–84 percentile half-range over the culled template ensemble
 (failed fits near σ* bounds or with tiny depth are dropped; locked is kept).
 Default FITS output: ``cak_fitresults_z{zlo}_z{zhi}.fits`` when the stack name
 contains a redshift bin, otherwise ``cak_fitresults_{stem}.fits``. The matching
-PNG is ``cak_fitresults_*.png`` (disable with ``--no-plot``).
+figure is ``cak_fitresults_*.png`` (or ``.pdf`` with ``--pdf``; disable with
+``--no-plot``).
 
 Multi-stack (``--validate``) mode
 ---------------------------------
@@ -25,8 +26,8 @@ Multi-stack (``--validate``) mode
 Same default FITS filename as single-spectrum mode for that redshift bin. In
 addition to the verr0 stack, discovers ``verr100/``, … stacks, fits each, and
 writes ``VERR*`` / ``TPL*`` / ``CAKPLOT*`` extensions for every level. Also
-writes ``cak_verr_diagnostic_z{zlo}_z{zhi}.png``. For each stack the σ* lower
-fit bound is raised to ``max(20, verr)`` km/s.
+writes ``cak_verr_diagnostic_z{zlo}_z{zhi}.png`` (or ``.pdf`` with ``--pdf``).
+For each stack the σ* lower fit bound is raised to ``max(20, verr)`` km/s.
 
 Ca K templates: data/stellar_templates/ (see that directory's README.md).
 """
@@ -60,6 +61,7 @@ from qsosigma.cak_metrics import (
     measure_cak_absorption,
 )
 from qsosigma.cak_plots import (
+    figure_output_path,
     parse_redshift_bin_from_name,
     plot_cak,
     plot_cak_verr_diagnostic,
@@ -152,7 +154,12 @@ def parse_args(argv=None):
     parser.add_argument(
         '--no-plot',
         action='store_true',
-        help='Do not write Ca K PNG output(s)',
+        help='Do not write Ca K figure output(s)',
+    )
+    parser.add_argument(
+        '--pdf',
+        action='store_true',
+        help='Write PDF figures instead of PNG',
     )
     return parser.parse_args(argv)
 
@@ -446,11 +453,12 @@ def run_single(args):
         )
     )
     if zlo_name is not None and zhi_name is not None:
-        out_png = os.path.join(
+        out_fig = os.path.join(
             output_dir, 'cak_fitresults_%s.png' % redshift_bin_tag(zlo_name, zhi_name),
         )
     else:
-        out_png = os.path.join(output_dir, 'cak_fitresults_%s.png' % stem)
+        out_fig = os.path.join(output_dir, 'cak_fitresults_%s.png' % stem)
+    out_fig = figure_output_path(out_fig, pdf=args.pdf)
 
     if not args.clobber and os.path.isfile(out_fits):
         print('Output exists (use --clobber): %s' % out_fits)
@@ -508,7 +516,7 @@ def run_single(args):
     print('Ca K fit results saved: %s' % out_fits)
 
     if not args.no_plot:
-        plot_cak(cak_result, ylabel, pixspec, out_png)
+        plot_cak(cak_result, ylabel, pixspec, out_fig)
     return 0
 
 
@@ -668,7 +676,10 @@ def run_validate(args):
     ))
 
     if not args.no_plot:
-        out_png = os.path.join(output_dir, 'cak_verr_diagnostic_%s.png' % tag)
+        out_fig = figure_output_path(
+            os.path.join(output_dir, 'cak_verr_diagnostic_%s.png' % tag),
+            pdf=args.pdf,
+        )
         plot_entries = []
         for entry in entries:
             cak_result = entry['cak_result']
@@ -693,7 +704,7 @@ def run_validate(args):
             })
         plot_cak_verr_diagnostic(
             plot_entries,
-            out_png,
+            out_fig,
             ylabel='Relative Flux and Fit Residual',
         )
     return 0

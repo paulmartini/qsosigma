@@ -34,6 +34,7 @@ import numpy as np
 
 from qsosigma.cak_plots import (
     discover_results_files,
+    figure_output_path,
     format_multipanel_label,
     load_cak_plot_snapshot,
     plot_cak_multipanel,
@@ -56,7 +57,12 @@ def parse_args():
     parser.add_argument(
         '-o', '--output',
         default='cak_stacks.png',
-        help='Output PNG path (default: cak_stacks.png; numbered if split)',
+        help='Output figure path (default: cak_stacks.png; numbered if split)',
+    )
+    parser.add_argument(
+        '--pdf',
+        action='store_true',
+        help='Write PDF instead of PNG (adjusts the output extension)',
     )
     parser.add_argument(
         '--dpi',
@@ -114,7 +120,7 @@ def main():
     # Shared label for flux and residual rows across heterogeneous stacks.
     plot_cak_multipanel(
         snapshots,
-        os.path.abspath(args.output),
+        figure_output_path(os.path.abspath(args.output), pdf=args.pdf),
         dpi=args.dpi,
         ylabel='Relative Flux and Fit Residual',
     )
