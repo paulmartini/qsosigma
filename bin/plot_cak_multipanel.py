@@ -15,7 +15,8 @@ For a single redshift bin's verr series, prefer ``plot_cak_verr_diagnostic.py``.
 
 Example
 -------
-  python plot_cak_multipanel.py "cak_fitresults_*.fits" -o cak_stacks.png
+  python bin/plot_cak_multipanel.py cak_fitresults*.fits -o cak_stacks.png
+  python bin/plot_cak_multipanel.py "cak_fitresults_*.fits" -o cak_stacks.png
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ import glob
 import os
 import sys
 from pathlib import Path
+from typing import Iterable, List
 
 _PY_DIR = Path(__file__).resolve().parents[1] / 'py'
 if _PY_DIR.is_dir() and str(_PY_DIR) not in sys.path:
@@ -44,8 +46,12 @@ def parse_args():
         description='Plot Ca II K fits from one or more Ca K results FITS files.',
     )
     parser.add_argument(
-        'pattern',
-        help='Glob pattern for input files, e.g. "cak_fitresults_*.fits"',
+        'inputs',
+        nargs='+',
+        help=(
+            'Input FITS files and/or glob patterns, e.g. cak_fitresults*.fits '
+            'or "cak_fitresults_*.fits"'
+        ),
     )
     parser.add_argument(
         '-o', '--output',
@@ -73,13 +79,28 @@ def stem_from_results(path: str) -> str:
     return os.path.splitext(base)[0]
 
 
-def discover_results_files(pattern: str):
-    """Expand a glob (or single path) to absolute Ca K results FITS paths."""
-    paths = sorted(glob.glob(pattern))
-    if not paths and ('*' not in pattern and '?' not in pattern and '[' not in pattern):
-        if os.path.isfile(pattern):
-            paths = [pattern]
-    return [os.path.abspath(path) for path in paths]
+def discover_results_files(inputs: Iterable[str]) -> List[str]:
+    """
+    Expand globs and/or explicit paths to absolute Ca K results FITS paths.
+
+    Shell-expanded globs (many file args) and quoted patterns both work.
+    """
+    paths = []
+    for item in inputs:
+        matched = sorted(glob.glob(item))
+        if matched:
+            paths.extend(matched)
+        elif os.path.isfile(item):
+            paths.append(item)
+    # Preserve order but drop duplicates (e.g. overlapping patterns).
+    seen = set()
+    unique = []
+    for path in paths:
+        abspath = os.path.abspath(path)
+        if abspath not in seen:
+            seen.add(abspath)
+            unique.append(abspath)
+    return unique
 
 
 # Backward-compatible alias
@@ -110,9 +131,12 @@ def load_snapshots(paths):
 
 def main():
     args = parse_args()
-    paths = discover_results_files(args.pattern)
+    paths = discover_results_files(args.inputs)
     if not paths:
-        print('ERROR: No files matched pattern: %s' % args.pattern, file=sys.stderr)
+        print(
+            'ERROR: No files matched: %s' % ' '.join(args.inputs),
+            file=sys.stderr,
+        )
         return 2
 
     snapshots, skipped = load_snapshots(paths)
@@ -127,12 +151,12 @@ def main():
         z_text = 'z=%.3f' % snapshot['z'] if np.isfinite(snapshot.get('z', np.nan)) else 'z=nan'
         print('  %s (%s)' % (snapshot['stem'], z_text))
 
-    # Relative Flux keeps multipanel stacks comparable across heterogeneous inputs.
+    # Shared label for flux and residual rows across heterogeneous stacks.
     plot_cak_multipanel(
         snapshots,
         os.path.abspath(args.output),
         dpi=args.dpi,
-        ylabel='Relative Flux',
+        ylabel='Relative Flux and Fit Residual',
     )
     return 0
 

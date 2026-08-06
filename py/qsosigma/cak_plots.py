@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from matplotlib.ticker import MaxNLocator
+from matplotlib.ticker import FixedLocator
 import numpy as np
 from astropy.io import fits
 
@@ -16,6 +16,13 @@ from qsosigma.cak_metrics import CAH_LAB_WAVE, CAK_LAB_WAVE, CAK_METRIC_SUFFIXES
 
 CAKPLOT_EXT_RE = re.compile(r'^CAKPLOT(\d+)$', re.IGNORECASE)
 VERR_EXT_RE = re.compile(r'^VERR(\d+)$', re.IGNORECASE)
+
+# Shared panel styling.
+CAK_WAVE_TICKS = (3870.0, 3900.0, 3930.0, 3960.0, 3990.0)
+TICK_LABELSIZE = 12
+LEGEND_FONTSIZE = 12
+MULTIPANEL_LEGEND_FONTSIZE = 14
+PANEL_LABEL_FONTSIZE = 14
 
 
 def velocity_to_wavelength(v_kms, ref):
@@ -31,7 +38,7 @@ def _mark_centroid(ax, v_kms, rest_wave, label=None):
     ax.axvline(wave, color='r', linestyle='--', linewidth=1.0, label=label)
 
 
-def _panel_label(ax, text, fontsize=10):
+def _panel_label(ax, text, fontsize=PANEL_LABEL_FONTSIZE):
     """Draw an upper-left panel annotation."""
     ax.text(
         0.03, 0.97, text, transform=ax.transAxes,
@@ -55,17 +62,17 @@ def shade_cak_excluded_regions(ax, plot):
         ax.axvspan(fit_hi, plot_hi, **shade_kw)
 
 
-def format_cak_wavelength_axis(ax):
-    """Apply integer Angstrom tick formatting on the wavelength axis."""
-    ax.xaxis.set_major_locator(MaxNLocator(nbins=8, steps=[1, 2, 5, 10]))
+def format_cak_wavelength_axis(ax, labelsize=TICK_LABELSIZE):
+    """Apply fixed Angstrom ticks (3870, 3900, 3930, 3960, 3990)."""
+    ax.xaxis.set_major_locator(FixedLocator(CAK_WAVE_TICKS))
     ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _pos: '%.0f' % x))
-    ax.tick_params(labelsize=9)
+    ax.tick_params(axis='both', labelsize=labelsize)
 
 
 def plot_cak_panels(
     ax_data, ax_res, cak_result, ylabel, pixspec,
     panel_label='Ca II K', show_legend=True, show_ylabel=True,
-    xlim=None, show_reference_template=True,
+    xlim=None, show_reference_template=False, show_centroid=False,
 ):
     """Draw Ca K data/model and residual panels on existing axes."""
     plot = cak_result['plot']
@@ -79,23 +86,26 @@ def plot_cak_panels(
     )
     ax_data.plot(plot['lbd'], plot['continuum'], '--', color='0.5', linewidth=1.0,
                  label='Power Law Continuum')
-    sig_tpl = plot.get('template_sig_kms', np.nan)
-    tpl_label = ' ({:.0f} km/s)'.format(sig_tpl) if np.isfinite(sig_tpl) else ''
     if show_reference_template and 'template_broad' in plot:
+        sig_tpl = plot.get('template_sig_kms', np.nan)
+        tpl_label = ' ({:.0f} km/s)'.format(sig_tpl) if np.isfinite(sig_tpl) else ''
         ax_data.plot(
             plot['lbd'], plot['template_broad'], '--', color='b', linewidth=1.0,
             label='Reference' + tpl_label,
         )
     ax_data.plot(plot['lbd'], plot['model'], '-', color='r', linewidth=1.2,
-                 label='Best Fit Convolved Template')
+                 label='Best Fit Template')
     rest_wave = plot.get('rest_wave', CAK_LAB_WAVE)
     ax_data.axvline(rest_wave, color='k', linestyle=':', linewidth=0.8,
                     label='Ca II K')
     cah_wave = plot.get('cah_wave', CAH_LAB_WAVE)
     ax_data.axvline(cah_wave, color='0.5', linestyle=':', linewidth=0.8,
                     label=r'Ca II H + H$\epsilon$')
-    _mark_centroid(ax_data, metrics.get('CAK_CENTROID', np.nan), rest_wave,
-                   label='Ca II K Centroid')
+    if show_centroid:
+        _mark_centroid(
+            ax_data, metrics.get('CAK_CENTROID', np.nan), rest_wave,
+            label='Ca II K Centroid',
+        )
     if show_ylabel:
         ax_data.set_ylabel(ylabel, fontsize=10)
     else:
@@ -106,10 +116,9 @@ def plot_cak_panels(
         ax_data.set_xlim(xlim)
     else:
         ax_data.set_xlim((plot['lbd'].min(), plot['lbd'].max()))
-    ax_data.tick_params(labelsize=9)
-    ax_data.set_xticklabels([])
+    ax_data.tick_params(axis='both', labelsize=TICK_LABELSIZE, labelbottom=False)
     if show_legend:
-        ax_data.legend(loc='lower right', fontsize=7)
+        ax_data.legend(loc='lower right', fontsize=LEGEND_FONTSIZE)
 
     ax_res.errorbar(plot['lbd'], plot['residuals'], yerr=plot['ferr'], fmt='none',
                     ecolor='0.7', elinewidth=0.4, alpha=0.5)
@@ -118,6 +127,7 @@ def plot_cak_panels(
     if xlim is not None:
         ax_res.set_xlim(xlim)
     format_cak_wavelength_axis(ax_res)
+    ax_res.tick_params(axis='both', labelsize=TICK_LABELSIZE)
 
 
 def plot_cak(cak_result, ylabel, pixspec, output_path):
@@ -418,7 +428,7 @@ def _snapshot_cak_result(snapshot: Dict) -> Dict:
     return {'plot': snapshot['plot'], 'metrics': snapshot.get('metrics', {})}
 
 
-def _legend_handles_from_snapshot(snapshot: Dict, ylabel: str, show_reference_template=True):
+def _legend_handles_from_snapshot(snapshot: Dict, ylabel: str, show_reference_template=False):
     """Extract legend handles/labels by drawing one panel off-screen."""
     pixspec = snapshot.get('pixspec', np.nan)
     if not np.isfinite(pixspec):
@@ -432,6 +442,7 @@ def _legend_handles_from_snapshot(snapshot: Dict, ylabel: str, show_reference_te
             show_legend=True,
             show_ylabel=False,
             show_reference_template=show_reference_template,
+            show_centroid=False,
         )
         return tmp_axes[0].get_legend_handles_labels()
     finally:
@@ -507,8 +518,11 @@ def plot_cak_verr_diagnostic(
         for ax in axes:
             ax.set_xlim(xlim)
             ax.set_xlabel('')
+            format_cak_wavelength_axis(ax)
             if row < n_panels - 1:
                 ax.set_xticklabels([])
+            else:
+                ax.tick_params(axis='both', labelsize=TICK_LABELSIZE)
 
     if ref_ax_data is not None:
         ref_ax_data.set_xlim(xlim)
@@ -520,7 +534,7 @@ def plot_cak_verr_diagnostic(
         fig.legend(
             legend_handles, legend_labels,
             loc='lower center', bbox_to_anchor=(0.5, 0.02),
-            ncol=2, fontsize=12, frameon=True,
+            ncol=2, fontsize=MULTIPANEL_LEGEND_FONTSIZE, frameon=True,
         )
 
     if title:
@@ -633,8 +647,7 @@ def _plot_cak_multipanel_page(
 
     ref_ax_data = None
     ref_ax_res = None
-    res_axes_by_row = {}
-    data_axes = []
+    panel_axes = []  # (ax_data, ax_res, row, col)
 
     for index, snapshot in enumerate(page_snapshots):
         slot = data_slots[index]
@@ -647,8 +660,12 @@ def _plot_cak_multipanel_page(
             ref_ax_data = ax_data
             ref_ax_res = ax_res
         else:
-            ax_data = fig.add_subplot(inner[0, 0], sharex=ref_ax_data)
-            ax_res = fig.add_subplot(inner[1, 0], sharex=ref_ax_res)
+            ax_data = fig.add_subplot(
+                inner[0, 0], sharex=ref_ax_data, sharey=ref_ax_data,
+            )
+            ax_res = fig.add_subplot(
+                inner[1, 0], sharex=ref_ax_data, sharey=ref_ax_res,
+            )
 
         pixspec = snapshot.get('pixspec', np.nan)
         if not np.isfinite(pixspec):
@@ -662,21 +679,27 @@ def _plot_cak_multipanel_page(
             show_ylabel=False,
             xlim=xlim,
         )
-        data_axes.append(ax_data)
-        res_axes_by_row.setdefault(row, []).append(ax_res)
-
-    for ax in data_axes:
-        ax.set_ylabel('')
-
-    for row, axes in res_axes_by_row.items():
-        for ax in axes:
-            ax.set_xlim(xlim)
-            ax.set_xlabel('')
-            if row < nrows - 1:
-                ax.set_xticklabels([])
+        panel_axes.append((ax_data, ax_res, row, col))
 
     if ref_ax_data is not None:
         ref_ax_data.set_xlim(xlim)
+
+    for ax_data, ax_res, row, col in panel_axes:
+        ax_data.set_ylabel('')
+        ax_res.set_xlabel('')
+        format_cak_wavelength_axis(ax_res)
+        # X labels only on the bottom grid row; y labels only on the left column.
+        # Use labelbottom/labelleft (not set_*ticklabels) so sharex/sharey stay intact.
+        show_x = row == nrows - 1
+        show_y = col == 0
+        ax_data.tick_params(
+            axis='both', labelsize=TICK_LABELSIZE,
+            labelbottom=False, labelleft=show_y,
+        )
+        ax_res.tick_params(
+            axis='both', labelsize=TICK_LABELSIZE,
+            labelbottom=show_x, labelleft=show_y,
+        )
 
     if include_legend and legend_slot is not None and legend_handles:
         legend_row = legend_slot // ncols
@@ -684,7 +707,10 @@ def _plot_cak_multipanel_page(
         inner = outer[legend_row, legend_col].subgridspec(1, 1)
         ax_legend = fig.add_subplot(inner[0, 0])
         ax_legend.axis('off')
-        ax_legend.legend(legend_handles, legend_labels, loc='center', fontsize=14)
+        ax_legend.legend(
+            legend_handles, legend_labels, loc='center',
+            fontsize=MULTIPANEL_LEGEND_FONTSIZE,
+        )
 
     fig.tight_layout(rect=[0.05, 0.04, 1.0, 1.0])
     fig.supxlabel(r'Wavelength ($\mathrm{\AA}$)', fontsize=16)
@@ -751,6 +777,8 @@ def plot_cak_multipanel(
                 _snapshot_cak_result(first), ylabel, pixspec,
                 show_legend=True,
                 show_ylabel=False,
+                show_reference_template=False,
+                show_centroid=False,
             )
             legend_handles, legend_labels = tmp_axes[0].get_legend_handles_labels()
         finally:
