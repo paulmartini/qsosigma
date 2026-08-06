@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import glob
 import os
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
@@ -16,6 +17,8 @@ from qsosigma.cak_metrics import CAH_LAB_WAVE, CAK_LAB_WAVE, CAK_METRIC_SUFFIXES
 
 CAKPLOT_EXT_RE = re.compile(r'^CAKPLOT(\d+)$', re.IGNORECASE)
 VERR_EXT_RE = re.compile(r'^VERR(\d+)$', re.IGNORECASE)
+# Redshift bin tag in filenames, e.g. ..._z0.250_z0.300_... or ..._z0.250_z0.300.fits
+STACK_ZBIN_RE = re.compile(r'_z(\d+\.\d+)_z(\d+\.\d+)(?:_|$|\.)')
 
 # Shared panel styling.
 CAK_WAVE_TICKS = (3870.0, 3900.0, 3930.0, 3960.0, 3990.0)
@@ -445,6 +448,63 @@ def is_cak_fitresults_fits(path: str) -> bool:
 
 # Backward-compatible alias
 is_cak_validate_fits = is_cak_fitresults_fits
+
+
+def stem_from_results(path: str) -> str:
+    """Strip known Ca K / legacy results prefixes and ``.fits`` from a path."""
+    base = os.path.basename(path)
+    for prefix in ('cak_fitresults_', 'cak_validate_'):
+        if base.startswith(prefix) and base.endswith('.fits'):
+            return base[len(prefix):-len('.fits')]
+    for suffix in ('_linefit.fits', '_cakfit.fits', '.fits'):
+        if base.endswith(suffix):
+            return base[:-len(suffix)]
+    return os.path.splitext(base)[0]
+
+
+def discover_results_files(inputs: Iterable[str]) -> List[str]:
+    """
+    Expand globs and/or explicit paths to absolute Ca K results FITS paths.
+
+    Shell-expanded globs (many file args) and quoted patterns both work.
+    Order is preserved; duplicates from overlapping patterns are dropped.
+    """
+    paths = []
+    for item in inputs:
+        matched = sorted(glob.glob(item))
+        if matched:
+            paths.extend(matched)
+        elif os.path.isfile(item):
+            paths.append(item)
+    seen = set()
+    unique = []
+    for path in paths:
+        abspath = os.path.abspath(path)
+        if abspath not in seen:
+            seen.add(abspath)
+            unique.append(abspath)
+    return unique
+
+
+# Backward-compatible alias
+discover_linefit_files = discover_results_files
+
+
+def redshift_bin_tag(zlo, zhi) -> str:
+    """Format a redshift-bin tag as ``z{zlo}_z{zhi}`` with three decimals."""
+    return 'z%.3f_z%.3f' % (float(zlo), float(zhi))
+
+
+def parse_redshift_bin_from_name(path: str) -> Tuple[Optional[float], Optional[float]]:
+    """
+    Return ``(zlo, zhi)`` parsed from a filename tag, or ``(None, None)``.
+
+    Matches tags like ``_z0.250_z0.300_`` or ``_z0.250_z0.300.fits``.
+    """
+    match = STACK_ZBIN_RE.search(os.path.basename(path))
+    if not match:
+        return None, None
+    return float(match.group(1)), float(match.group(2))
 
 
 def _default_panel_label(snapshot: Dict) -> str:

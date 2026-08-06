@@ -59,7 +59,12 @@ from qsosigma.cak_metrics import (
     expected_dispersion_kms,
     measure_cak_absorption,
 )
-from qsosigma.cak_plots import plot_cak, plot_cak_verr_diagnostic
+from qsosigma.cak_plots import (
+    parse_redshift_bin_from_name,
+    plot_cak,
+    plot_cak_verr_diagnostic,
+    redshift_bin_tag,
+)
 from qsosigma.fit_results import build_cak_plot_hdu, print_cak_summary
 from qsosigma.spectrum_io import (
     DEFAULT_UNCERTAINTY_FLOOR,
@@ -76,8 +81,6 @@ def _cakplot_extname(verr_kms):
 
 FITS_STR_MAX = 68  # FITS header string value limit (characters)
 VERR_DIR_RE = re.compile(r'^verr(\d+)$')
-# Redshift bin tag embedded in stack filenames, e.g. ..._z0.250_z0.300_...
-STACK_ZBIN_RE = re.compile(r'_z(\d+\.\d+)_z(\d+\.\d+)(?:_|$)')
 
 
 def parse_args(argv=None):
@@ -160,10 +163,6 @@ def stellar_template_dir(args_dir):
     return default_stellar_template_dir()
 
 
-def redshift_bin_tag(zlo, zhi):
-    return 'z%.3f_z%.3f' % (float(zlo), float(zhi))
-
-
 def default_fitresults_filename(zlo=None, zhi=None, stem=None):
     """Return the default Ca K fit-results FITS basename."""
     if zlo is not None and zhi is not None:
@@ -171,19 +170,6 @@ def default_fitresults_filename(zlo=None, zhi=None, stem=None):
     if stem:
         return 'cak_fitresults_%s.fits' % stem
     raise ValueError('Need zlo/zhi or stem for default fit-results filename')
-
-
-def parse_redshift_bin_from_name(path):
-    """
-    Return ``(zlo, zhi)`` parsed from a stack filename, or ``(None, None)``.
-
-    Matches tags like ``_z0.250_z0.300_`` used in verrtests stack names.
-    """
-    base = os.path.basename(path)
-    match = STACK_ZBIN_RE.search(base)
-    if not match:
-        return None, None
-    return float(match.group(1)), float(match.group(2))
 
 
 def discover_verr_directories(verr_root):

@@ -22,11 +22,9 @@ Example
 from __future__ import annotations
 
 import argparse
-import glob
 import os
 import sys
 from pathlib import Path
-from typing import Iterable, List
 
 _PY_DIR = Path(__file__).resolve().parents[1] / 'py'
 if _PY_DIR.is_dir() and str(_PY_DIR) not in sys.path:
@@ -35,9 +33,11 @@ if _PY_DIR.is_dir() and str(_PY_DIR) not in sys.path:
 import numpy as np
 
 from qsosigma.cak_plots import (
+    discover_results_files,
     format_multipanel_label,
     load_cak_plot_snapshot,
     plot_cak_multipanel,
+    stem_from_results,
 )
 
 
@@ -65,46 +65,6 @@ def parse_args():
         help='Figure DPI (default: 150)',
     )
     return parser.parse_args()
-
-
-def stem_from_results(path: str) -> str:
-    """Strip known Ca K / legacy results prefixes and ``.fits`` from a path."""
-    base = os.path.basename(path)
-    for prefix in ('cak_fitresults_', 'cak_validate_'):
-        if base.startswith(prefix) and base.endswith('.fits'):
-            return base[len(prefix):-len('.fits')]
-    for suffix in ('_linefit.fits', '_cakfit.fits', '.fits'):
-        if base.endswith(suffix):
-            return base[:-len(suffix)]
-    return os.path.splitext(base)[0]
-
-
-def discover_results_files(inputs: Iterable[str]) -> List[str]:
-    """
-    Expand globs and/or explicit paths to absolute Ca K results FITS paths.
-
-    Shell-expanded globs (many file args) and quoted patterns both work.
-    """
-    paths = []
-    for item in inputs:
-        matched = sorted(glob.glob(item))
-        if matched:
-            paths.extend(matched)
-        elif os.path.isfile(item):
-            paths.append(item)
-    # Preserve order but drop duplicates (e.g. overlapping patterns).
-    seen = set()
-    unique = []
-    for path in paths:
-        abspath = os.path.abspath(path)
-        if abspath not in seen:
-            seen.add(abspath)
-            unique.append(abspath)
-    return unique
-
-
-# Backward-compatible alias
-discover_linefit_files = discover_results_files
 
 
 def load_snapshots(paths):
